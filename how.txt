@@ -1,0 +1,109 @@
+TypeScript Setup and Workflow Instructions
+===========================================
+
+Step 1: Install TypeScript
+--------------------------
+Inside your project folder, run:
+
+npm install --save-dev typescript ts-node @types/node
+
+- typescript → the compiler
+- ts-node → run .ts files directly
+- @types/node → Node.js type definitions
+
+Check version:
+
+npx tsc -v
+
+Step 2: Initialize TypeScript Configuration
+-------------------------------------------
+Create tsconfig.json:
+
+npx tsc --init
+
+Minimal config example:
+
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "rootDir": "./",
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true
+  },
+  "include": ["backend/**/*.ts", "frontend/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+Step 3: Rename JS Files to TS
+-----------------------------
+Rename files you want to convert:
+
+backend/index.js → backend/index.ts
+
+Step 4: Add Type Annotations
+----------------------------
+Example:
+
+const playerName: string = "Player1";
+const score: number = 0;
+
+function greet(name: string): void {
+  console.log(`Hello, ${name}!`);
+}
+
+greet(playerName);
+
+Step 5: Run TypeScript
+----------------------
+1. Directly with ts-node:
+
+npx ts-node backend/index.ts
+
+2. Compile to JavaScript then run:
+
+npx tsc
+node dist/backend/index.js
+
+Step 6: Add Scripts to package.json
+-----------------------------------
+"scripts": {
+  "start": "ts-node backend/index.ts",
+  "build": "tsc",
+  "serve": "node dist/backend/index.js"
+}
+
+Then run:
+
+npm run start   # run TS directly
+npm run build   # compile TS → JS
+npm run serve   # run compiled JS
+
+Step 7: Project Structure (Optional)
+------------------------------------
+ft_transcendence_game_pong/
+├─ backend/
+│  ├─ index.ts
+│  └─ game/
+├─ frontend/
+│  └─ index.ts
+├─ dist/        # compiled JS
+├─ node_modules/
+├─ package.json
+└─ tsconfig.json
+
+Step 8: Learn and Use TypeScript Gradually
+------------------------------------------
+- Add types to variables, function parameters, and returns.
+- Use interfaces and types for structured objects:
+
+interface Player {
+  name: string;
+  score: number;
+}
+
+const player: Player = { name: "Player1", score: 0 };
+
+- Enable strict checks in tsconfig.json to catch more bugs.
+- Gradually convert existing JS files to TS.

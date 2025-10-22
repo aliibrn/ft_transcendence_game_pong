@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "dev": "ts-node backend/app.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.6.1"
+  }
+}
