@@ -1,12 +1,28 @@
 {
-  "type": "module",
+  "name": "ft_transcendence_game_pong",
+  "version": "1.0.0",
+  "description": "FRONTEND (React + Babylon) |  - UI |  - Frontend Routing (/play, /login, /profile) |  - WebSocket client (real-time) |  - fetch() calls to backend APIs | |---- calls ---->   BACKEND (Fastify / Node)                     |  - Backend Routing (/auth, /users, /matchmaking)                     |  - Database                     |  - WebSocket Server (real-time)",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node backend/app.ts",
+    "build": "tsc",
+    "serve": "node dist/backend/app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aliibrn/ft_transcendence_game_pong.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aliibrn/ft_transcendence_game_pong/issues"
+  },
+  "homepage": "https://github.com/aliibrn/ft_transcendence_game_pong#readme",
   "devDependencies": {
     "@types/node": "^24.9.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
-  },
-  "scripts": {
-    "dev": "ts-node backend/app.ts"
   },
   "dependencies": {
     "fastify": "^5.6.1"

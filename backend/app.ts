@@ -1,23 +1,14 @@
-import Fastify from "fastify"
-import { game } from "./game.ts";
+const fastify = require("fastify")({logger: true});
+const updateGameState = require("./gameModule");
 
-
-const fastify = Fastify();
-
-fastify.get("/", async (req, res) => {
-    return {message: "hello to /"}
+fastify.get("/", async (req: any, reply: any) => {
+  return {message: "hello "};
 })
 
-game()
+fastify.post("/input", async (req: any, reply: any) => {
+  const input = req.body; // { left: true, right: false }
+  updateGameState(input);
+  return { status: "ok" };
+});
 
-const start = async () => {
-  try {
-    await fastify.listen({ port: 3000 });
-    console.log("Server running at http://localhost:3000");
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
-
-start();
+fastify.listen({port: 3000})

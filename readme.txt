@@ -39,3 +39,13 @@ aliases like @routes, @game, @services
 logger
 error handler
 npm scripts (dev, build, prod)
+
+Back-end → maintains the authoritative game state (ball position, paddles, scores).
+
+Front-end → renders the scene in Babylon.js using the state received from the server.
+
+Front-end → server → sends player input (key presses).
+
+Server → front-end → sends updated positions every tick/frame.
+
+This is how multiplayer games are usually designed.
