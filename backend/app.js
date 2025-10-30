@@ -1,5 +1,4 @@
-
-'use strict'
+'use strict';
 
 const fastify = require('fastify')();
 const PongGame = require('./game');
@@ -10,70 +9,46 @@ fastify.register(require('@fastify/static'), {
   prefix: '/'
 });
 
-// Game instances per connection
 const games = new Map();
-
-// Game loop interval (60 FPS)
-const TICK_RATE = 1000 / 60;
 
 fastify.register(async function (fastify) {
   fastify.get('/ws', { websocket: true }, (socket, req) => {
     console.log('✅ Client connected');
-    
-    // Create a new game instance for this client
+
     const gameId = Date.now().toString();
     const game = new PongGame();
     games.set(gameId, { game, socket });
-    
-    // Send initial game state
-    socket.send(JSON.stringify({
-      type: 'init',
-      data: game.getState()
-    }));
-    
-    // Store player input
-    let currentInput = null;
-    
-    // Start game loop for this client
-    const gameLoop = setInterval(() => {
-      const gameState = game.update(currentInput);
-      
-      // Send updated state to client
-      socket.send(JSON.stringify({
-        type: 'update',
-        data: gameState
-      }));
-      
-      // Reset input after processing
-      currentInput = null;
-    }, TICK_RATE);
-    
-    // Handle messages from client
+
     socket.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
-        console.log("Received message from client:", data);
-        
-        if (data.type === 'input') {
-          // Store player input for next update
-          currentInput = data.direction; // 'left' or 'right'
+        console.log('📩 Received:', data);
+
+        if (data.type === 'established') {
+          socket.send(JSON.stringify({
+            type: 'init',
+            data: game.getState()
+          }));
+        } 
+        else if (data.type === 'input') {
+          game.updatePlayer(data.direction);
+          socket.send(JSON.stringify({
+            type: 'update',
+            data: game.getState()
+          }));
         }
       } catch (error) {
-        console.error('❌ Error parsing message:', error);
+        console.error('❌ Error:', error);
       }
     });
-    
-    // Handle disconnection
+
     socket.on('close', () => {
       console.log('🔌 Client disconnected');
-      clearInterval(gameLoop);
       games.delete(gameId);
     });
-    
-    // Handle errors
+
     socket.on('error', (error) => {
       console.error('❌ WebSocket error:', error);
-      clearInterval(gameLoop);
       games.delete(gameId);
     });
   });
