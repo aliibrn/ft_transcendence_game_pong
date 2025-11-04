@@ -1,7 +1,7 @@
 'use strict';
 
 const fastify = require('fastify')();
-const PongGame = require('./game');
+const {PongGame, createGame, StartGame} = require("./Game_Utils/PongGame");
 
 fastify.register(require('@fastify/websocket'));
 fastify.register(require('@fastify/static'), {
