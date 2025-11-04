@@ -1,7 +1,7 @@
 'use strict';
 
 const fastify = require('fastify')();
-const {PongGame, createGame, StartGame} = require("./Game_Utils/PongGame");
+const { PongGame, createGame, StartGame } = require("./Game_Utils/");
 
 fastify.register(require('@fastify/websocket'));
 fastify.register(require('@fastify/static'), {
@@ -10,47 +10,28 @@ fastify.register(require('@fastify/static'), {
 });
 
 const games = new Map();
+const players = [];
 
 fastify.register(async function (fastify) {
   fastify.get('/ws', { websocket: true }, (socket, req) => {
     console.log('✅ Client connected');
 
-    const gameId = Date.now().toString();
-    const game = new PongGame();
-    games.set(gameId, { game, socket });
+    // socket enter that means a game is occurred so even that game is a multiplayer local game
+    // or remote multiplayer 
+    // or solo vs ia 
 
-    socket.on('message', (message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        console.log('📩 Received:', data);
+    // so we should first of all create a base class of the game with the mode
 
-        if (data.type === 'established') {
-          socket.send(JSON.stringify({
-            type: 'init',
-            data: game.getState()
-          }));
-        } 
-        else if (data.type === 'input') {
-          game.updatePlayer(data.direction);
-          socket.send(JSON.stringify({
-            type: 'update',
-            data: game.getState()
-          }));
-        }
-      } catch (error) {
-        console.error('❌ Error:', error);
+    /* if connection get established  */ if (data.type === 'established') {
+      if (data.mode === 'solo') {
+        startSoloGame(socket); 
+      } else if (data.mode === 'local') {
+        startLocalGame(socket);
+      } else if (data.mode === 'remote') {
+        joinRemoteGame(socket);
       }
-    });
+    }
 
-    socket.on('close', () => {
-      console.log('🔌 Client disconnected');
-      games.delete(gameId);
-    });
-
-    socket.on('error', (error) => {
-      console.error('❌ WebSocket error:', error);
-      games.delete(gameId);
-    });
   });
 });
 
