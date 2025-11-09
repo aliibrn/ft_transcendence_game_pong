@@ -1,118 +1,467 @@
-const socket = new WebSocket("ws://localhost:3000/ws");
-const canvas = document.getElementById('renderCanvas');
-const engine = new BABYLON.Engine(canvas, true);
+// client.js - Complete Pong Client with Babylon.js
 
-let player, scene;
-let fieldWidth, fieldDepth;
+// ==================== GAME STATE ====================
+let socket = null;
+let scene = null;
+let engine = null;
+let camera = null;
+
+let gameMode = null;
+let playerId = null;
+let gameId = null;
+let isGameRunning = false;
+
+// Game objects
+let player1Paddle = null;
+let player2Paddle = null;
+let ball = null;
+let field = null;
+
+// Input tracking
 let keys = {};
 
-const createScene = () => {
-  scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.15);
+// ==================== DOM ELEMENTS ====================
+const canvas = document.getElementById('renderCanvas');
+const modeSelection = document.getElementById('modeSelection');
+const statusMessage = document.getElementById('statusMessage');
+const header = document.getElementById('header');
+const gameOverScreen = document.getElementById('gameOverScreen');
 
-  const camera = new BABYLON.ArcRotateCamera(
-    "camera",
-    Math.PI / 2,
-    Math.PI / 3,
-    30,
-    new BABYLON.Vector3(0, 0, 0),
-    scene
-  );
-  camera.attachControl(canvas, true);
+const localBtn = document.getElementById('localBtn');
+const remoteBtn = document.getElementById('remoteBtn');
+const soloBtn = document.getElementById('soloBtn');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const mainMenuBtn = document.getElementById('mainMenuBtn');
 
-  const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-  light.intensity = 0.8;
+const player1ScoreEl = document.getElementById('player1Score');
+const player2ScoreEl = document.getElementById('player2Score');
+const gameModeEl = document.getElementById('gameMode');
+const controlsInfoEl = document.getElementById('controlsInfo');
+const player2LabelEl = document.getElementById('player2Label');
+const winnerTextEl = document.getElementById('winnerText');
+const finalScoreEl = document.getElementById('finalScore');
 
-  const field = BABYLON.MeshBuilder.CreateGround("field", { width: fieldWidth, height: fieldDepth }, scene);
-  const fieldMat = new BABYLON.StandardMaterial("fieldMat", scene);
-  fieldMat.diffuseColor = new BABYLON.Color3(0.1, 0.3, 0.2);
-  fieldMat.emissiveColor = new BABYLON.Color3(0.05, 0.15, 0.1);
-  field.material = fieldMat;
-
-  const wallMat = new BABYLON.StandardMaterial("wallMat", scene);
-  wallMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.4);
-  wallMat.alpha = 0.3;
-
-  const leftWall = BABYLON.MeshBuilder.CreateBox("leftWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
-  leftWall.position.x = -fieldWidth / 2;
-  leftWall.position.y = 1.5;
-  leftWall.material = wallMat;
-
-  const rightWall = BABYLON.MeshBuilder.CreateBox("rightWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
-  rightWall.position.x = fieldWidth / 2;
-  rightWall.position.y = 1.5;
-  rightWall.material = wallMat;
-
-  // player = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
-  // const playerMat = new BABYLON.StandardMaterial("playerMat", scene);
-  // playerMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
-  // playerMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
-  // player.material = playerMat;
-  // player.position.y = 0.4;
-
-  window.addEventListener('keydown', (e) => {
-    keys[e.key] = true;
-  });
-
-  window.addEventListener('keyup', (e) => {
-    keys[e.key] = false;
-  });
-
-  scene.onBeforeRenderObservable.add(() => {
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-      socket.send(JSON.stringify({ type: 'input', direction: 'left' }));
-    }
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-      socket.send(JSON.stringify({ type: 'input', direction: 'right' }));
-    }
-  });
-
-  return scene;
-};
-
-function updateGameState(state) {
-  if (!player) return;
-  
-  player.position.x = state.player.x;
-  player.position.y = state.player.y;
-  player.position.z = state.player.z;
+// ==================== UTILITY FUNCTIONS ====================
+function showStatus(message, type = 'connected') {
+    statusMessage.textContent = message;
+    statusMessage.className = `visible ${type}`;
+    setTimeout(() => {
+        statusMessage.classList.remove('visible');
+    }, 3000);
 }
 
-window.addEventListener('resize', () => {
-  engine.resize();
+function hideModeSelection() {
+    modeSelection.classList.add('hidden');
+    setTimeout(() => {
+        modeSelection.style.display = 'none';
+    }, 500);
+}
+
+function showModeSelection() {
+    modeSelection.style.display = 'flex';
+    setTimeout(() => {
+        modeSelection.classList.remove('hidden');
+    }, 10);
+}
+
+function showGame() {
+    header.classList.add('visible');
+    canvas.classList.add('visible');
+}
+
+function hideGame() {
+    header.classList.remove('visible');
+    canvas.classList.remove('visible');
+}
+
+function showGameOver(winner, scores) {
+    gameOverScreen.classList.add('visible');
+    
+    if (winner === 'player1') {
+        winnerTextEl.textContent = gameMode === 'local' ? 'Player 1 Wins! 🎉' : 
+                                   gameMode === 'solo' ? 'You Win! 🎉' :
+                                   playerId === 'player1' ? 'You Win! 🎉' : 'Opponent Wins!';
+    } else {
+        winnerTextEl.textContent = gameMode === 'local' ? 'Player 2 Wins! 🎉' : 
+                                   gameMode === 'solo' ? 'AI Wins!' :
+                                   playerId === 'player2' ? 'You Win! 🎉' : 'Opponent Wins!';
+    }
+    
+    finalScoreEl.textContent = `${scores.player1} - ${scores.player2}`;
+}
+
+function hideGameOver() {
+    gameOverScreen.classList.remove('visible');
+}
+
+function updateScores(player1Score, player2Score) {
+    player1ScoreEl.textContent = player1Score;
+    player2ScoreEl.textContent = player2Score;
+}
+
+function updateGameInfo(mode) {
+    if (mode === 'local') {
+        gameModeEl.textContent = 'Local Mode';
+        controlsInfoEl.textContent = 'P1: W/S | P2: ↑/↓';
+        player2LabelEl.textContent = 'Player 2';
+    } else if (mode === 'solo') {
+        gameModeEl.textContent = 'vs AI Mode';
+        controlsInfoEl.textContent = 'W/S or ↑/↓ to move';
+        player2LabelEl.textContent = 'AI';
+    } else if (mode === 'remote') {
+        gameModeEl.textContent = 'Online Mode';
+        controlsInfoEl.textContent = 'W/S or ↑/↓ to move';
+        player2LabelEl.textContent = playerId === 'player1' ? 'Opponent' : 'Opponent';
+    }
+}
+
+// ==================== WEBSOCKET CONNECTION ====================
+function connectWebSocket() {
+    socket = new WebSocket("ws://localhost:3000/ws");
+
+    socket.onopen = () => {
+        console.log("✅ Connected to server");
+        showStatus("Connected to server", "connected");
+    };
+
+    socket.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            handleServerMessage(message);
+        } catch (error) {
+            console.error('❌ Error parsing message:', error);
+        }
+    };
+
+    socket.onerror = (error) => {
+        console.error("❌ WebSocket error:", error);
+        showStatus("Connection error", "error");
+    };
+
+    socket.onclose = () => {
+        console.log("🔌 Connection closed");
+        showStatus("Disconnected from server", "error");
+        
+        // Return to main menu after 2 seconds
+        setTimeout(() => {
+            resetGame();
+        }, 2000);
+    };
+}
+
+function sendToServer(type, data = {}) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type, ...data }));
+    }
+}
+
+// ==================== SERVER MESSAGE HANDLER ====================
+function handleServerMessage(message) {
+    console.log('📨 Received:', message.type);
+
+    switch (message.type) {
+        case 'connected':
+            console.log('Connection ID:', message.data.connectionId);
+            break;
+
+        case 'queueStatus':
+            showStatus(`Waiting for opponent... Position: ${message.data.position}`, 'waiting');
+            break;
+
+        case 'matchFound':
+            gameId = message.data.gameId;
+            playerId = message.data.yourSide;
+            showStatus("Match found! Starting game...", "connected");
+            initializeGame(message.data.initialState);
+            updateGameInfo('remote');
+            sendToServer('ready');
+            break;
+
+        case 'gameCreated':
+            gameId = message.data.gameId;
+            gameMode = message.data.mode;
+            showStatus("Game created! Get ready...", "connected");
+            initializeGame(message.data.initialState);
+            updateGameInfo(gameMode);
+            sendToServer('ready');
+            break;
+
+        case 'gameStarted':
+            isGameRunning = true;
+            showStatus("Game started!", "connected");
+            break;
+
+        case 'update':
+            updateGameState(message.data);
+            break;
+
+        case 'gameEnd':
+            isGameRunning = false;
+            showGameOver(message.data.winner, message.data.finalScore);
+            break;
+
+        case 'opponentDisconnected':
+            showStatus(message.data.message, "error");
+            setTimeout(() => {
+                resetGame();
+            }, 3000);
+            break;
+
+        case 'error':
+            showStatus(message.data.message, "error");
+            break;
+    }
+}
+
+// ==================== BABYLON.JS SCENE SETUP ====================
+function initializeGame(state) {
+    hideModeSelection();
+    showGame();
+
+    const fieldWidth = state.fieldWidth;
+    const fieldDepth = state.fieldDepth;
+
+    // Create Babylon engine and scene
+    engine = new BABYLON.Engine(canvas, true);
+    scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.15);
+
+    // Camera
+    camera = new BABYLON.ArcRotateCamera(
+        "camera",
+        Math.PI / 2,
+        Math.PI / 3,
+        40,
+        new BABYLON.Vector3(0, 0, 0),
+        scene
+    );
+    camera.attachControl(canvas, true);
+    camera.lowerRadiusLimit = 20;
+    camera.upperRadiusLimit = 60;
+
+    // Light
+    const light = new BABYLON.HemisphericLight(
+        "light",
+        new BABYLON.Vector3(0, 1, 0),
+        scene
+    );
+    light.intensity = 0.8;
+
+    // Field
+    field = BABYLON.MeshBuilder.CreateGround(
+        "field",
+        { width: fieldWidth, height: fieldDepth },
+        scene
+    );
+    const fieldMat = new BABYLON.StandardMaterial("fieldMat", scene);
+    fieldMat.diffuseColor = new BABYLON.Color3(0.1, 0.3, 0.2);
+    fieldMat.emissiveColor = new BABYLON.Color3(0.05, 0.15, 0.1);
+    field.material = fieldMat;
+
+    // Walls (top and bottom)
+    const wallMat = new BABYLON.StandardMaterial("wallMat", scene);
+    wallMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.4);
+    wallMat.alpha = 0.3;
+
+    const topWall = BABYLON.MeshBuilder.CreateBox(
+        "topWall",
+        { width: fieldWidth, height: 2, depth: 0.5 },
+        scene
+    );
+    topWall.position.z = -fieldDepth / 2;
+    topWall.position.y = 1;
+    topWall.material = wallMat;
+
+    const bottomWall = BABYLON.MeshBuilder.CreateBox(
+        "bottomWall",
+        { width: fieldWidth, height: 2, depth: 0.5 },
+        scene
+    );
+    bottomWall.position.z = fieldDepth / 2;
+    bottomWall.position.y = 1;
+    bottomWall.material = wallMat;
+
+    // Player 1 Paddle (left side - blue)
+    player1Paddle = BABYLON.MeshBuilder.CreateBox(
+        "player1",
+        { width: state.player1.width, height: 1.5, depth: state.player1.height },
+        scene
+    );
+    const player1Mat = new BABYLON.StandardMaterial("player1Mat", scene);
+    player1Mat.diffuseColor = new BABYLON.Color3(0.2, 0.5, 1);
+    player1Mat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
+    player1Paddle.material = player1Mat;
+    player1Paddle.position.y = 0.75;
+
+    // Player 2 Paddle (right side - red)
+    player2Paddle = BABYLON.MeshBuilder.CreateBox(
+        "player2",
+        { width: state.player2.width, height: 1.5, depth: state.player2.height },
+        scene
+    );
+    const player2Mat = new BABYLON.StandardMaterial("player2Mat", scene);
+    player2Mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
+    player2Mat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
+    player2Paddle.material = player2Mat;
+    player2Paddle.position.y = 0.75;
+
+    // Ball
+    ball = BABYLON.MeshBuilder.CreateSphere(
+        "ball",
+        { diameter: state.ball.radius * 2 },
+        scene
+    );
+    const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
+    ballMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+    ballMat.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+    ball.material = ballMat;
+    ball.position.y = state.ball.radius;
+
+    // Add glow effect to ball
+    const gl = new BABYLON.GlowLayer("glow", scene);
+    gl.intensity = 0.5;
+
+    // Start render loop
+    engine.runRenderLoop(() => {
+        scene.render();
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        engine.resize();
+    });
+
+    // Initial state update
+    updateGameState(state);
+}
+
+// ==================== GAME STATE UPDATE ====================
+function updateGameState(state) {
+    if (!player1Paddle || !player2Paddle || !ball) return;
+
+    // Update paddles
+    player1Paddle.position.x = state.player1.x;
+    player1Paddle.position.z = state.player1.z;
+
+    player2Paddle.position.x = state.player2.x;
+    player2Paddle.position.z = state.player2.z;
+
+    // Update ball
+    ball.position.x = state.ball.x;
+    ball.position.z = state.ball.z;
+
+    // Update scores
+    updateScores(state.player1.score, state.player2.score);
+}
+
+// ==================== INPUT HANDLING ====================
+window.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    handleInput();
 });
 
-socket.onopen = () => {
-  console.log("✅ Connected to server");
-  socket.send(JSON.stringify({ type: 'mode', mode: 'local' }));
-};
+window.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+});
 
-socket.onmessage = (event) => {
-  try {
-    const data = JSON.parse(event.data);
-    console.log("📩 Received:", data.type);
+function handleInput() {
+    if (!isGameRunning) return;
 
-    if (data.type === 'init') {
-      fieldWidth = data.data.fieldWidth;
-      fieldDepth = data.data.fieldDepth;
-      scene = createScene();
-      engine.runRenderLoop(() => {
-        scene.render();
-      });
-      // updateGameState(data.data);
-    } 
-    else if (data.type === 'update') {
-      updateGameState(data.data);
+    if (gameMode === 'local') {
+        // Player 1: W/S
+        if (keys['w'] || keys['W']) {
+            sendToServer('input', { playerId: 'player1', direction: 'up' });
+        }
+        if (keys['s'] || keys['S']) {
+            sendToServer('input', { playerId: 'player1', direction: 'down' });
+        }
+        // Player 2: Arrow Keys
+        if (keys['ArrowUp']) {
+            sendToServer('input', { playerId: 'player2', direction: 'up' });
+        }
+        if (keys['ArrowDown']) {
+            sendToServer('input', { playerId: 'player2', direction: 'down' });
+        }
+    } else {
+        // Solo or Remote: Use either W/S or Arrow Keys
+        if (keys['w'] || keys['W'] || keys['ArrowUp']) {
+            sendToServer('input', { playerId: playerId || 'player1', direction: 'up' });
+        }
+        if (keys['s'] || keys['S'] || keys['ArrowDown']) {
+            sendToServer('input', { playerId: playerId || 'player1', direction: 'down' });
+        }
     }
-  } catch (error) {
-    console.error('❌ Error:', error);
-  }
-};
+}
 
-socket.onerror = (error) => {
-  console.error("❌ WebSocket error:", error);
-};
+// ==================== MODE SELECTION ====================
+localBtn.addEventListener('click', () => {
+    gameMode = 'local';
+    sendToServer('selectMode', { mode: 'local' });
+    showStatus("Creating local game...", "waiting");
+});
 
-socket.onclose = () => {
-  console.log("🔌 Connection closed");
-};
+remoteBtn.addEventListener('click', () => {
+    gameMode = 'remote';
+    sendToServer('selectMode', { mode: 'remote' });
+    showStatus("Searching for opponent...", "waiting");
+});
+
+soloBtn.addEventListener('click', () => {
+    gameMode = 'solo';
+    sendToServer('selectMode', { mode: 'solo' });
+    showStatus("Creating solo game...", "waiting");
+});
+
+// ==================== GAME OVER ACTIONS ====================
+playAgainBtn.addEventListener('click', () => {
+    hideGameOver();
+    
+    if (gameMode === 'remote') {
+        // For remote, need to find new match
+        resetGame();
+        gameMode = 'remote';
+        sendToServer('selectMode', { mode: 'remote' });
+        showStatus("Searching for opponent...", "waiting");
+    } else {
+        // For local/solo, restart the same game
+        sendToServer('restartGame');
+        showStatus("Restarting game...", "waiting");
+    }
+});
+
+mainMenuBtn.addEventListener('click', () => {
+    hideGameOver();
+    resetGame();
+});
+
+// ==================== GAME RESET ====================
+function resetGame() {
+    // Dispose Babylon scene
+    if (scene) {
+        scene.dispose();
+        scene = null;
+    }
+    if (engine) {
+        engine.dispose();
+        engine = null;
+    }
+
+    // Reset variables
+    player1Paddle = null;
+    player2Paddle = null;
+    ball = null;
+    field = null;
+    gameMode = null;
+    playerId = null;
+    gameId = null;
+    isGameRunning = false;
+    keys = {};
+
+    // Reset UI
+    hideGame();
+    showModeSelection();
+    updateScores(0, 0);
+}
+
+// ==================== INITIALIZATION ====================
+connectWebSocket();
