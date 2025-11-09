@@ -43,12 +43,12 @@ const createScene = () => {
   rightWall.position.y = 1.5;
   rightWall.material = wallMat;
 
-  player = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
-  const playerMat = new BABYLON.StandardMaterial("playerMat", scene);
-  playerMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
-  playerMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
-  player.material = playerMat;
-  player.position.y = 0.4;
+  // player = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
+  // const playerMat = new BABYLON.StandardMaterial("playerMat", scene);
+  // playerMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
+  // playerMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
+  // player.material = playerMat;
+  // player.position.y = 0.4;
 
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
@@ -84,7 +84,7 @@ window.addEventListener('resize', () => {
 
 socket.onopen = () => {
   console.log("✅ Connected to server");
-  socket.send(JSON.stringify({ type: 'established' }));
+  socket.send(JSON.stringify({ type: 'mode', mode: 'local' }));
 };
 
 socket.onmessage = (event) => {
@@ -99,7 +99,7 @@ socket.onmessage = (event) => {
       engine.runRenderLoop(() => {
         scene.render();
       });
-      updateGameState(data.data);
+      // updateGameState(data.data);
     } 
     else if (data.type === 'update') {
       updateGameState(data.data);

@@ -1,171 +1,448 @@
-pong-project/
-│
-├── server/
-│   ├── game.js               # Fastify + WebSocket entry point
-│   ├── game/
-│   │   ├── PongGame.js        # Core logic (ball, paddles, physics)
-│   │   ├── Player.js          # Generic player interface (local, remote, AI)
-│   │   ├── AIPlayer.js        # Inherits from Player, adds AI logic
-│   │   ├── GameRoom.js        # Connects two players to one PongGame
-│   │   └── GameManager.js     # Manages rooms and matchmaking
-│   └── utils/
-│       └── physics.js         # Collision and reflection functions
-│
-├── public/
-│   ├── index.html
-│   ├── client.js              # Frontend WebSocket + rendering
-│   ├── scenes/                # (optional) for BabylonJS rendering layers
-│   └── assets/
-│
-└── package.json
-
-
-
-
-🧭 GAME STRUCTURE — DEVELOPMENT INSTRUCTIONS
-1️⃣ Create the Core Game Class
-
-Implement a main Game class that manages everything inside a match.
-
-It must contain:
-
-A dynamic list or array for players.
-
-One ball instance.
-
-A method to update all game elements each frame.
-
-The Game should never depend on a fixed number of players.
-
-All players and the ball must update inside one unified update() function.
-
-2️⃣ Implement a Base Player Class
-
-Create a parent Player class that represents any type of player.
-
-It should only store basic properties like:
-
-Side or position (top/bottom).
-
-Position coordinates.
-
-Movement speed.
-
-It must include an update() function that can be overridden by child classes.
-
-The base player does not handle input; it just defines the common structure.
-
-3️⃣ Create a Local Player Class
-
-Make a LocalPlayer class that extends the Player base class.
-
-This class handles keyboard input (left/right).
-
-It should store which keys control movement.
-
-It must move its paddle according to pressed keys.
-
-Used when the player is playing on the same computer (solo or local 2-player mode).
-
-4️⃣ Create an AI Player Class
-
-Make an AIPlayer class that extends from Player.
-
-This class automatically tracks the ball’s position.
-
-It moves its paddle to align with the ball’s horizontal position.
-
-Used only in solo mode (one human + one AI).
-
-5️⃣ Create a Remote Player Class
-
-Make a RemotePlayer class that extends Player.
-
-It does not handle local input; instead, it receives updates from a server (via WebSocket).
-
-It should update its position when new data arrives.
-
-Used only in remote multiplayer mode (online play).
-
-6️⃣ Create a Ball Class
-
-The Ball class manages its position, velocity, and collision detection.
-
-It must move automatically each update cycle.
-
-It must bounce when touching walls or paddles.
-
-It should handle collision checks against every player in the Game’s player list.
-
-The ball should reverse direction when it hits a paddle and reset when someone scores.
-
-7️⃣ Design Game Modes
-
-Implement a setup logic that decides which players to create depending on the mode:
-
-Solo Mode:
-
-One LocalPlayer (bottom).
-
-One AIPlayer (top).
-
-Zero or one socket (only needed for synchronization).
-
-Local Multiplayer Mode:
-
-Two LocalPlayer objects.
-
-Both controlled by keyboard (different keys).
-
-One socket only, because everything happens on one client.
-
-Remote Multiplayer Mode:
-
-One LocalPlayer (bottom).
-
-One RemotePlayer (top).
-
-Requires two sockets total — one per connected player on separate machines.
-
-8️⃣ Add Update Loop
-
-The main game loop should call:
-
-Each player’s update() method.
-
-The ball’s update() method.
-
-This loop runs continuously (using requestAnimationFrame or server tick).
-
-The Game object remains the only component responsible for managing synchronization and state.
-
-9️⃣ Networking Considerations
-
-In remote mode, each client keeps a local copy of the Game.
-
-The server acts as the authoritative state (it decides the true ball and player positions).
-
-Each player sends their input to the server; the server broadcasts the updated state to all clients.
-
-10️⃣ Summary of Class Responsibilities
-Class	Description	Used In
-Game	Core engine that stores and updates everything	All modes
-Player	Base class for any player type	All modes
-LocalPlayer	Handles keyboard input for a local human	Solo / Local / Remote
-AIPlayer	Simulates an AI opponent	Solo
-RemotePlayer	Syncs with another player via network	Remote
-Ball	Handles physics and collisions	All modes
-11️⃣ Socket Summary
-Mode	Number of Sockets	Notes
-Solo	0 or 1	Local human vs AI
-Local 2-Player	1	Two humans on one keyboard
-Remote	2	One socket per player on separate clients
-✅ Final Advice
-
-Keep all game logic inside the Game class; avoid spreading it across clients and servers.
-
-Always use the same update cycle for every mode (just change the player types).
-
-This structure prevents hardcoding and allows you to easily add new player types later (like spectator, replay, or training bots).
-
-Would you like me to follow up with a technical flow diagram (visual blocks showing relationships between these classes and modes)?
+# Pong Game Architecture Documentation
+
+## Overview
+This is a complete multiplayer Pong game server supporting three game modes: **Local**, **Remote**, and **Solo (AI)**.
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         CLIENT                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  PongClient (WebSocket)                              │  │
+│  │  - Handles connection                                │  │
+│  │  - Sends mode selection & input                      │  │
+│  │  - Receives game state updates                       │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           │ WebSocket
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                         SERVER                              │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  GameController                                     │   │
+│  │  - Manages connections                              │   │
+│  │  - Creates WebSocketHandler for each client        │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                           │                                 │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  WebSocketHandler (per connection)                  │   │
+│  │  - Handles messages                                 │   │
+│  │  - Routes to appropriate service/game               │   │
+│  └─────────────────────────────────────────────────────┘   │
+│              │                        │                     │
+│              │                        │                     │
+│    ┌─────────▼───────────┐  ┌────────▼──────────┐          │
+│    │ MatchmakingService  │  │   PongGame         │          │
+│    │ (Remote mode only)  │  │   (Local/Solo)     │          │
+│    │  - Queue management │  │   - Game logic     │          │
+│    │  - Creates games    │  │   - Physics        │          │
+│    │  - Pairs players    │  │   - AI (solo)      │          │
+│    └─────────────────────┘  └────────────────────┘          │
+│              │                                               │
+│    ┌─────────▼───────────────────────────────────┐          │
+│    │  PongGame (Remote mode)                     │          │
+│    │  - Manages 2 players                        │          │
+│    │  - Broadcasts to both sockets               │          │
+│    └─────────────────────────────────────────────┘          │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Models                                             │   │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐             │   │
+│  │  │ Player  │  │  Ball   │  │PongGame │             │   │
+│  │  └─────────┘  └─────────┘  └─────────┘             │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Game Modes
+
+### 1. Local Mode
+**Flow:**
+1. Client connects and selects "local" mode
+2. Server creates a PongGame instance
+3. Single WebSocket connection controls both paddles
+4. Client sends input for player1 (W/S) and player2 (Arrow keys)
+5. Server broadcasts updates to the same client
+
+**Key Points:**
+- One socket, one game instance
+- Both players share same keyboard
+- No matchmaking needed
+- Immediate game creation
+
+### 2. Remote Mode
+**Flow:**
+1. Client A connects and selects "remote" mode
+2. Server adds Client A to matchmaking queue
+3. Client B connects and selects "remote" mode
+4. Server matches Client A and Client B
+5. Server creates PongGame with both sockets
+6. Each client controls one paddle
+7. Server broadcasts updates to both clients
+
+**Key Points:**
+- Two sockets, one game instance
+- Matchmaking queue system
+- Each player gets assigned 'player1' or 'player2'
+- Game starts when both players are ready
+- Handles disconnections gracefully
+
+### 3. Solo Mode (AI)
+**Flow:**
+1. Client connects and selects "solo" mode
+2. Server creates a PongGame instance
+3. Player controls player1 paddle
+4. Server AI controls player2 paddle
+5. Server updates AI position automatically
+6. Server broadcasts updates to client
+
+**Key Points:**
+- One socket, one game instance
+- AI logic runs on server
+- Simple AI: follows ball position
+- No matchmaking needed
+
+## Message Protocol
+
+### Client → Server
+
+#### Mode Selection
+```javascript
+{
+  type: "selectMode",
+  mode: "local" | "remote" | "solo"
+}
+```
+
+#### Ready Signal
+```javascript
+{
+  type: "ready"
+}
+```
+
+#### Player Input
+```javascript
+{
+  type: "input",
+  playerId: "player1" | "player2",
+  direction: "up" | "down"
+}
+```
+
+#### Leave Queue
+```javascript
+{
+  type: "leaveQueue"
+}
+```
+
+#### Restart Game
+```javascript
+{
+  type: "restartGame"
+}
+```
+
+### Server → Client
+
+#### Connection Acknowledgment
+```javascript
+{
+  type: "connected",
+  data: {
+    connectionId: "conn_123_456",
+    timestamp: 1234567890
+  }
+}
+```
+
+#### Queue Status (Remote mode)
+```javascript
+{
+  type: "queueStatus",
+  data: {
+    status: "waiting",
+    position: 1
+  }
+}
+```
+
+#### Match Found (Remote mode)
+```javascript
+{
+  type: "matchFound",
+  data: {
+    gameId: "remote_123_456",
+    yourSide: "player1" | "player2",
+    initialState: { ... }
+  }
+}
+```
+
+#### Game Created (Local/Solo mode)
+```javascript
+{
+  type: "gameCreated",
+  data: {
+    gameId: "local_123_456",
+    mode: "local" | "solo",
+    initialState: { ... }
+  }
+}
+```
+
+#### Game Started
+```javascript
+{
+  type: "gameStarted",
+  data: {
+    message: "Game started!",
+    state: { ... }
+  }
+}
+```
+
+#### Game Update (60 FPS)
+```javascript
+{
+  type: "update",
+  data: {
+    gameId: "...",
+    mode: "...",
+    player1: {
+      id: "player1",
+      side: "left",
+      x: -9,
+      z: 0,
+      width: 0.5,
+      height: 3,
+      score: 2
+    },
+    player2: { ... },
+    ball: {
+      x: 1.5,
+      z: -2.3,
+      radius: 0.3
+    },
+    fieldWidth: 20,
+    fieldDepth: 30,
+    isRunning: true,
+    winner: null
+  }
+}
+```
+
+#### Game End
+```javascript
+{
+  type: "gameEnd",
+  data: {
+    winner: "player1" | "player2",
+    finalScore: {
+      player1: 5,
+      player2: 3
+    }
+  }
+}
+```
+
+#### Opponent Disconnected
+```javascript
+{
+  type: "opponentDisconnected",
+  data: {
+    message: "Your opponent has disconnected"
+  }
+}
+```
+
+## Key Components
+
+### GameController
+- Entry point for all connections
+- Creates WebSocketHandler for each client
+- Tracks connection statistics
+
+### WebSocketHandler
+- Handles messages per connection
+- Routes to appropriate services
+- Manages connection lifecycle
+- Different behavior based on mode
+
+### MatchmakingService (Singleton)
+- Manages queue for remote players
+- Pairs players automatically
+- Creates remote games
+- Handles disconnections in remote games
+- Cleans up finished games
+
+### PongGame
+- Core game logic
+- Physics simulation (ball, paddles)
+- Collision detection
+- Scoring system
+- AI logic for solo mode
+- 60 FPS game loop
+- State broadcasting
+
+### Player
+- Position management
+- Movement logic
+- Score tracking
+- Boundary checking
+
+### Ball
+- Position and velocity
+- Collision response
+- Speed increase on paddle hits
+- Reset logic
+
+## Data Flow Examples
+
+### Local Game Flow
+```
+1. Client connects
+2. Client → selectMode("local")
+3. Server creates PongGame
+4. Server → gameCreated
+5. Client → ready
+6. Server starts game loop
+7. Client → input (player1, "up")
+8. Server updates player1 position
+9. Server → update (60 FPS)
+10. Client renders game
+```
+
+### Remote Game Flow
+```
+1. Client A connects
+2. Client A → selectMode("remote")
+3. Server adds to queue
+4. Server → queueStatus
+5. Client B connects
+6. Client B → selectMode("remote")
+7. Server matches A & B
+8. Server creates PongGame
+9. Server → matchFound (to both)
+10. Client A → ready
+11. Client B → ready
+12. Server starts game loop
+13. Client A → input (player1, "up")
+14. Server updates player1 position
+15. Server → update (to both clients, 60 FPS)
+16. Both clients render game
+```
+
+## Scalability Considerations
+
+### Current Design
+- Single server instance
+- In-memory game storage
+- Suitable for small-scale deployment
+
+### Future Improvements
+1. **Redis for State Management**
+   - Store game state in Redis
+   - Enable horizontal scaling
+   - Persist matchmaking queue
+
+2. **Room-based Architecture**
+   - Socket.io rooms for better isolation
+   - Easier broadcasting
+
+3. **Load Balancing**
+   - Multiple server instances
+   - Sticky sessions for WebSocket
+
+4. **Database Integration**
+   - Player profiles
+   - Match history
+   - Leaderboards
+
+## Testing the System
+
+### Test Local Mode
+```javascript
+const client = new PongClient();
+client.connect();
+client.selectMode('local');
+// After gameCreated
+client.ready();
+// Send inputs
+client.sendInput('player1', 'up');
+client.sendInput('player2', 'down');
+```
+
+### Test Remote Mode
+```javascript
+// Client 1
+const client1 = new PongClient();
+client1.connect();
+client1.selectMode('remote');
+
+// Client 2 (in another browser/tab)
+const client2 = new PongClient();
+client2.connect();
+client2.selectMode('remote');
+
+// Both will receive matchFound
+// After match, both send ready
+client1.ready();
+client2.ready();
+
+// Each sends input
+client1.sendInput(client1.playerId, 'up');
+client2.sendInput(client2.playerId, 'down');
+```
+
+### Test Solo Mode
+```javascript
+const client = new PongClient();
+client.connect();
+client.selectMode('solo');
+// After gameCreated
+client.ready();
+// Only player1 input matters
+client.sendInput('player1', 'up');
+// player2 moves automatically (AI)
+```
+
+## Error Handling
+
+- Invalid mode selection → error response
+- Disconnection during remote game → notify opponent
+- Queue abandonment → automatic removal
+- Invalid input → ignored
+- Game cleanup on errors
+
+## Performance
+
+- **Game Loop:** 60 FPS (16.67ms per frame)
+- **Network Updates:** 60 times per second
+- **Input Latency:** < 50ms (typical)
+- **Matchmaking:** Instant (for 2 players)
+
+## Security Considerations
+
+1. Input validation on all messages
+2. Rate limiting (future)
+3. Cheating prevention (server authoritative)
+4. Connection authentication (future)
+5. DDoS protection (future)
+
+## Next Steps
+
+1. Add player authentication
+2. Implement ELO rating system
+3. Add replay system
+4. Create tournament mode
+5. Add power-ups
+6. Implement spectator mode
+7. Add chat system
+8. Mobile touch controls
+9. Custom game settings (speed, ball size, etc.)
+10. Statistics tracking
