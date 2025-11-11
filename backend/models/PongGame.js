@@ -10,9 +10,9 @@ class PongGame {
     this.fieldDepth = 30;
     this.maxScore = 5;
     
-    this.player1 = new Player('player1', 'left', this.fieldDepth);
-    this.player2 = new Player('player2', 'right', this.fieldDepth);
-    this.ball = new Ball();
+    // this.player1 = new Player('player1', 'left', this.fieldDepth);
+    // this.player2 = new Player('player2', 'right', this.fieldDepth);
+    // this.ball = new Ball();
     
     this.gameLoop = null;
     this.isRunning = false;
@@ -27,7 +27,7 @@ class PongGame {
     if (this.isRunning) return;
     
     this.isRunning = true;
-    this.ball.reset();
+    // this.ball.reset();
     
     // Start game loop (60 FPS)
     this.gameLoop = setInterval(() => {
@@ -50,21 +50,21 @@ class PongGame {
     if (!this.isRunning) return;
 
     // AI logic for solo mode
-    if (this.mode === 'solo') {
-      this.updateAI();
-    }
+    // if (this.mode === 'solo') {
+    //   this.updateAI();
+    // }
 
-    // Update ball position
-    this.ball.update();
+    // // Update ball position
+    // this.ball.update();
 
-    // Check collisions
-    this.checkCollisions();
+    // // Check collisions
+    // this.checkCollisions();
 
-    // Check scoring
-    this.checkScoring();
+    // // Check scoring
+    // this.checkScoring();
 
-    // Broadcast state to all connected clients
-    this.broadcastState();
+    // // Broadcast state to all connected clients
+    // this.broadcastState();
   }
 
   updateAI() {
@@ -157,8 +157,10 @@ class PongGame {
 
     if (playerId === 'player1') {
       this.player1.move(direction);
+      console.log(direction);
     } else if (playerId === 'player2') {
       this.player2.move(direction);
+      console.log(direction);
     }
   }
 
@@ -236,9 +238,9 @@ class PongGame {
     return {
       gameId: this.gameId,
       mode: this.mode,
-      player1: this.player1.getState(),
-      player2: this.player2.getState(),
-      ball: this.ball.getState(),
+      // player1: this.player1.getState(),
+      // player2: this.player2.getState(),
+      // ball: this.ball.getState(),
       fieldWidth: this.fieldWidth,
       fieldDepth: this.fieldDepth,
       isRunning: this.isRunning,

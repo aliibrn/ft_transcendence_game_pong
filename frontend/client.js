@@ -76,17 +76,17 @@ function hideGame() {
 
 function showGameOver(winner, scores) {
     gameOverScreen.classList.add('visible');
-    
+
     if (winner === 'player1') {
-        winnerTextEl.textContent = gameMode === 'local' ? 'Player 1 Wins! 🎉' : 
-                                   gameMode === 'solo' ? 'You Win! 🎉' :
-                                   playerId === 'player1' ? 'You Win! 🎉' : 'Opponent Wins!';
+        winnerTextEl.textContent = gameMode === 'local' ? 'Player 1 Wins! 🎉' :
+            gameMode === 'solo' ? 'You Win! 🎉' :
+                playerId === 'player1' ? 'You Win! 🎉' : 'Opponent Wins!';
     } else {
-        winnerTextEl.textContent = gameMode === 'local' ? 'Player 2 Wins! 🎉' : 
-                                   gameMode === 'solo' ? 'AI Wins!' :
-                                   playerId === 'player2' ? 'You Win! 🎉' : 'Opponent Wins!';
+        winnerTextEl.textContent = gameMode === 'local' ? 'Player 2 Wins! 🎉' :
+            gameMode === 'solo' ? 'AI Wins!' :
+                playerId === 'player2' ? 'You Win! 🎉' : 'Opponent Wins!';
     }
-    
+
     finalScoreEl.textContent = `${scores.player1} - ${scores.player2}`;
 }
 
@@ -141,7 +141,7 @@ function connectWebSocket() {
     socket.onclose = () => {
         console.log("🔌 Connection closed");
         showStatus("Disconnected from server", "error");
-        
+
         // Return to main menu after 2 seconds
         setTimeout(() => {
             resetGame();
@@ -231,13 +231,13 @@ function initializeGame(state) {
         "camera",
         Math.PI / 2,
         Math.PI / 3,
-        40,
+        30,
         new BABYLON.Vector3(0, 0, 0),
         scene
     );
     camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 20;
-    camera.upperRadiusLimit = 60;
+    // camera.lowerRadiusLimit = 20;
+    // camera.upperRadiusLimit = 60;
 
     // Light
     const light = new BABYLON.HemisphericLight(
@@ -253,6 +253,7 @@ function initializeGame(state) {
         { width: fieldWidth, height: fieldDepth },
         scene
     );
+
     const fieldMat = new BABYLON.StandardMaterial("fieldMat", scene);
     fieldMat.diffuseColor = new BABYLON.Color3(0.1, 0.3, 0.2);
     fieldMat.emissiveColor = new BABYLON.Color3(0.05, 0.15, 0.1);
@@ -263,63 +264,82 @@ function initializeGame(state) {
     wallMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.4);
     wallMat.alpha = 0.3;
 
-    const topWall = BABYLON.MeshBuilder.CreateBox(
-        "topWall",
-        { width: fieldWidth, height: 2, depth: 0.5 },
-        scene
-    );
-    topWall.position.z = -fieldDepth / 2;
-    topWall.position.y = 1;
-    topWall.material = wallMat;
+    const leftWall = BABYLON.MeshBuilder.CreateBox("leftWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
+    leftWall.position.x = -fieldWidth / 2;
+    leftWall.position.y = 1.5;
+    leftWall.material = wallMat;
 
-    const bottomWall = BABYLON.MeshBuilder.CreateBox(
-        "bottomWall",
-        { width: fieldWidth, height: 2, depth: 0.5 },
-        scene
-    );
-    bottomWall.position.z = fieldDepth / 2;
-    bottomWall.position.y = 1;
-    bottomWall.material = wallMat;
-
-    // Player 1 Paddle (left side - blue)
-    player1Paddle = BABYLON.MeshBuilder.CreateBox(
-        "player1",
-        { width: state.player1.width, height: 1.5, depth: state.player1.height },
-        scene
-    );
-    const player1Mat = new BABYLON.StandardMaterial("player1Mat", scene);
-    player1Mat.diffuseColor = new BABYLON.Color3(0.2, 0.5, 1);
-    player1Mat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
-    player1Paddle.material = player1Mat;
-    player1Paddle.position.y = 0.75;
-
-    // Player 2 Paddle (right side - red)
-    player2Paddle = BABYLON.MeshBuilder.CreateBox(
-        "player2",
-        { width: state.player2.width, height: 1.5, depth: state.player2.height },
-        scene
-    );
-    const player2Mat = new BABYLON.StandardMaterial("player2Mat", scene);
-    player2Mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
-    player2Mat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
-    player2Paddle.material = player2Mat;
-    player2Paddle.position.y = 0.75;
+    const rightWall = BABYLON.MeshBuilder.CreateBox("rightWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
+    rightWall.position.x = fieldWidth / 2;
+    rightWall.position.y = 1.5;
+    rightWall.material = wallMat;
 
     // Ball
-    ball = BABYLON.MeshBuilder.CreateSphere(
-        "ball",
-        { diameter: state.ball.radius * 2 },
-        scene
-    );
+    const ball = BABYLON.MeshBuilder.CreateSphere("ball", { diameter: 0.8 }, scene);
     const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
     ballMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-    ballMat.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+    ballMat.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
     ball.material = ballMat;
-    ball.position.y = state.ball.radius;
+    ball.position.y = 0.4;
 
-    // Add glow effect to ball
-    const gl = new BABYLON.GlowLayer("glow", scene);
-    gl.intensity = 0.5;
+    // Player1 paddle (blue)
+    player1Paddle = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
+    const player1PaddleMat = new BABYLON.StandardMaterial("playerMat", scene);
+    player1PaddleMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
+    player1PaddleMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
+    player1Paddle.material = player1PaddleMat;
+    player1Paddle.position.z = fieldDepth / 2 - 1;
+    player1Paddle.position.y = 0.4;
+
+    // player2 paddle (red)
+    player2Paddle = BABYLON.MeshBuilder.CreateBox("ai", { width: 4, height: 0.8, depth: 0.8 }, scene);
+    const player2PaddleMat = new BABYLON.StandardMaterial("aiMat", scene);
+    player2PaddleMat.diffuseColor = new BABYLON.Color3(1, 0.3, 0.3);
+    player2PaddleMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
+    player2Paddle.material = player2PaddleMat;
+    player2Paddle.position.z = -fieldDepth / 2 + 1;
+    player2Paddle.position.y = 0.4;
+
+
+    // // Player 1 Paddle (left side - blue)
+    // player1Paddle = BABYLON.MeshBuilder.CreateBox(
+    //     "player1",
+    //     { width: state.player1.width, height: 1.5, depth: state.player1.height },
+    //     scene
+    // );
+    // const player1Mat = new BABYLON.StandardMaterial("player1Mat", scene);
+    // player1Mat.diffuseColor = new BABYLON.Color3(0.2, 0.5, 1);
+    // player1Mat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
+    // player1Paddle.material = player1Mat;
+    // player1Paddle.position.y = 0.75;
+
+    // // Player 2 Paddle (right side - red)
+    // player2Paddle = BABYLON.MeshBuilder.CreateBox(
+    //     "player2",
+    //     { width: state.player2.width, height: 1.5, depth: state.player2.height },
+    //     scene
+    // );
+    // const player2Mat = new BABYLON.StandardMaterial("player2Mat", scene);
+    // player2Mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
+    // player2Mat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
+    // player2Paddle.material = player2Mat;
+    // player2Paddle.position.y = 0.75;
+
+    // // Ball
+    // ball = BABYLON.MeshBuilder.CreateSphere(
+    //     "ball",
+    //     { diameter: state.ball.radius * 2 },
+    //     scene
+    // );
+    // const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
+    // ballMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+    // ballMat.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+    // ball.material = ballMat;
+    // ball.position.y = state.ball.radius;
+
+    // // Add glow effect to ball
+    // const gl = new BABYLON.GlowLayer("glow", scene);
+    // gl.intensity = 0.5;
 
     // Start render loop
     engine.runRenderLoop(() => {
@@ -332,7 +352,7 @@ function initializeGame(state) {
     });
 
     // Initial state update
-    updateGameState(state);
+    // updateGameState(state);
 }
 
 // ==================== GAME STATE UPDATE ====================
@@ -369,26 +389,26 @@ function handleInput() {
 
     if (gameMode === 'local') {
         // Player 1: W/S
-        if (keys['w'] || keys['W']) {
-            sendToServer('input', { playerId: 'player1', direction: 'up' });
+        if (keys['a'] || keys['A']) {
+            sendToServer('input', { playerId: 'player1', direction: 'left' });
         }
-        if (keys['s'] || keys['S']) {
-            sendToServer('input', { playerId: 'player1', direction: 'down' });
+        if (keys['d'] || keys['D']) {
+            sendToServer('input', { playerId: 'player1', direction: 'right' });
         }
         // Player 2: Arrow Keys
-        if (keys['ArrowUp']) {
-            sendToServer('input', { playerId: 'player2', direction: 'up' });
+        if (keys['ArrowLeft']) {
+            sendToServer('input', { playerId: 'player2', direction: 'left' });
         }
-        if (keys['ArrowDown']) {
-            sendToServer('input', { playerId: 'player2', direction: 'down' });
+        if (keys['ArrowRight']) {
+            sendToServer('input', { playerId: 'player2', direction: 'right' });
         }
     } else {
         // Solo or Remote: Use either W/S or Arrow Keys
-        if (keys['w'] || keys['W'] || keys['ArrowUp']) {
-            sendToServer('input', { playerId: playerId || 'player1', direction: 'up' });
+        if (keys['a'] || keys['A'] || keys['ArrowLeft']) {
+            sendToServer('input', { playerId: playerId || 'player1', direction: 'left' });
         }
-        if (keys['s'] || keys['S'] || keys['ArrowDown']) {
-            sendToServer('input', { playerId: playerId || 'player1', direction: 'down' });
+        if (keys['d'] || keys['D'] || keys['ArrowRight']) {
+            sendToServer('input', { playerId: playerId || 'player1', direction: 'right' });
         }
     }
 }
@@ -415,7 +435,7 @@ soloBtn.addEventListener('click', () => {
 // ==================== GAME OVER ACTIONS ====================
 playAgainBtn.addEventListener('click', () => {
     hideGameOver();
-    
+
     if (gameMode === 'remote') {
         // For remote, need to find new match
         resetGame();

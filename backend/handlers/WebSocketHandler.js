@@ -10,7 +10,7 @@ class WebSocketHandler {
     this.gameId = null;
     this.mode = null;
     this.playerId = null;
-    
+
     this.initialize();
   }
 
@@ -20,7 +20,7 @@ class WebSocketHandler {
     this.socket.on('error', (err) => this.handleError(err));
 
     // Send connection acknowledgment
-    this.send('connected', { 
+    this.send('connected', {
       connectionId: this.connectionId,
       timestamp: Date.now()
     });
@@ -78,7 +78,7 @@ class WebSocketHandler {
       this.gameId = `${mode}_${this.connectionId}_${Date.now()}`;
       this.game = new PongGame(mode, this.gameId);
       this.game.addPlayer(this.socket);
-      
+
       this.send('gameCreated', {
         gameId: this.gameId,
         mode: mode,
@@ -97,7 +97,7 @@ class WebSocketHandler {
     } else if (this.game) {
       // For local/solo mode
       this.game.markPlayerReady(this.socket);
-      this.send('gameStarted', { 
+      this.send('gameStarted', {
         message: 'Game started!',
         state: this.game.getState()
       });
@@ -107,7 +107,7 @@ class WebSocketHandler {
   handleInput(data) {
     const { playerId, direction } = data;
 
-    if (!direction || !['up', 'down'].includes(direction)) {
+    if (!direction || !['left', 'right'].includes(direction)) {
       return;
     }
 
@@ -119,11 +119,18 @@ class WebSocketHandler {
         game.handleInput(this.socket.playerId, direction);
       }
     } else if (this.game) {
-      // For local mode, both players use same connection
-      // For solo mode, only player1 can send input
-      if (this.mode === 'local' || (this.mode === 'solo' && playerId === 'player1')) {
-        this.game.handleInput(playerId, direction);
+
+      switch (this.mode) {
+        case 'local':
+          this.game.handleInput(playerId, direction);
+          break;
+
+        case 'solo':
+          break;
       }
+      // if (this.mode === 'local' || (this.mode === 'solo' && playerId === 'player1')) {
+      //   this.game.handleInput(playerId, direction);
+      // }
     }
   }
 
@@ -140,7 +147,7 @@ class WebSocketHandler {
       this.game.cleanup();
       this.game = new PongGame(this.mode, this.gameId);
       this.game.addPlayer(this.socket);
-      
+
       this.send('gameCreated', {
         gameId: this.gameId,
         mode: this.mode,
