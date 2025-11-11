@@ -1,27 +1,34 @@
 // models/Player.js
 class Player {
-  constructor(id, side, fieldDepth) {
+  constructor(id, side, fieldWidth, fieldDepth) {
     this.id = id;
     this.side = side; // 'left' or 'right'
-    this.x = side === 'left' ? -9 : 9; // Position near edge
-    this.z = 0; // Center position
+    this.z = side === 'down' ? (fieldDepth / 2 - 1) : (-fieldDepth / 2 + 1); // Position near edge
+    this.x = 0; // Center position
+    this.y = 0,4;
     this.width = 0.5;
     this.height = 3;
     this.speed = 0.3;
     this.fieldDepth = fieldDepth;
+    this.fieldWidth = fieldWidth;
     this.score = 0;
     this.socket = null; // For remote players
   }
 
   move(direction) {
-    const halfDepth = this.fieldDepth / 2;
-    const halfHeight = this.height / 2;
-
-    if (direction === 'up') {
-      this.z = Math.max(-halfDepth + halfHeight, this.z - this.speed);
-    } else if (direction === 'down') {
-      this.z = Math.min(halfDepth - halfHeight, this.z + this.speed);
-    }
+    console.log("dkhalti??");
+    
+    if (direction === 'left') {
+      this.x -= this.speed;
+      console.log("wa ser liser");
+      
+    } else if (direction === 'right') {
+      this.x += this.speed;
+      console.log("wa ser limen");    
+    } 
+    // Keep player in bounds
+    
+    this.x = Math.max(-this.fieldWidth / 2 + 2, Math.min(this.fieldWidth / 2 - 2, this.x));
   }
 
   reset() {
@@ -38,6 +45,7 @@ class Player {
       side: this.side,
       x: this.x,
       z: this.z,
+      y: this.y,
       width: this.width,
       height: this.height,
       score: this.score

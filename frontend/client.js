@@ -127,6 +127,7 @@ function connectWebSocket() {
     socket.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
+            console.log(message);
             handleServerMessage(message);
         } catch (error) {
             console.error('❌ Error parsing message:', error);
@@ -221,6 +222,7 @@ function initializeGame(state) {
     const fieldWidth = state.fieldWidth;
     const fieldDepth = state.fieldDepth;
 
+
     // Create Babylon engine and scene
     engine = new BABYLON.Engine(canvas, true);
     scene = new BABYLON.Scene(engine);
@@ -236,8 +238,6 @@ function initializeGame(state) {
         scene
     );
     camera.attachControl(canvas, true);
-    // camera.lowerRadiusLimit = 20;
-    // camera.upperRadiusLimit = 60;
 
     // Light
     const light = new BABYLON.HemisphericLight(
@@ -288,8 +288,9 @@ function initializeGame(state) {
     player1PaddleMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
     player1PaddleMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
     player1Paddle.material = player1PaddleMat;
-    player1Paddle.position.z = fieldDepth / 2 - 1;
-    player1Paddle.position.y = 0.4;
+    player1Paddle.position.z = state.player1.z;
+    player1Paddle.position.y = state.player1.y;
+    // player1Paddle.position.x = state.player1.x;
 
     // player2 paddle (red)
     player2Paddle = BABYLON.MeshBuilder.CreateBox("ai", { width: 4, height: 0.8, depth: 0.8 }, scene);
@@ -297,8 +298,9 @@ function initializeGame(state) {
     player2PaddleMat.diffuseColor = new BABYLON.Color3(1, 0.3, 0.3);
     player2PaddleMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
     player2Paddle.material = player2PaddleMat;
-    player2Paddle.position.z = -fieldDepth / 2 + 1;
-    player2Paddle.position.y = 0.4;
+    player2Paddle.position.z = state.player2.z;
+    player2Paddle.position.y = state.player2.y;
+    // player2Paddle.position.x = state.player2.x;
 
 
     // // Player 1 Paddle (left side - blue)
@@ -357,21 +359,22 @@ function initializeGame(state) {
 
 // ==================== GAME STATE UPDATE ====================
 function updateGameState(state) {
-    if (!player1Paddle || !player2Paddle || !ball) return;
+
+    if (!player1Paddle || !player2Paddle) return;
+    // || ball
+    console.log("katwsal hna ?");
+    console.log(state);
 
     // Update paddles
     player1Paddle.position.x = state.player1.x;
-    player1Paddle.position.z = state.player1.z;
-
     player2Paddle.position.x = state.player2.x;
-    player2Paddle.position.z = state.player2.z;
 
     // Update ball
-    ball.position.x = state.ball.x;
-    ball.position.z = state.ball.z;
+    // ball.position.x = state.ball.x;
+    // ball.position.z = state.ball.z;
 
     // Update scores
-    updateScores(state.player1.score, state.player2.score);
+    // updateScores(state.player1.score, state.player2.score);
 }
 
 // ==================== INPUT HANDLING ====================
@@ -396,10 +399,10 @@ function handleInput() {
             sendToServer('input', { playerId: 'player1', direction: 'right' });
         }
         // Player 2: Arrow Keys
-        if (keys['ArrowLeft']) {
+        if (keys['j'] || keys['J']) {
             sendToServer('input', { playerId: 'player2', direction: 'left' });
         }
-        if (keys['ArrowRight']) {
+        if (keys['l'] || keys['L']) {
             sendToServer('input', { playerId: 'player2', direction: 'right' });
         }
     } else {

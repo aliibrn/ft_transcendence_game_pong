@@ -10,9 +10,9 @@ class PongGame {
     this.fieldDepth = 30;
     this.maxScore = 5;
     
-    // this.player1 = new Player('player1', 'left', this.fieldDepth);
-    // this.player2 = new Player('player2', 'right', this.fieldDepth);
-    // this.ball = new Ball();
+    this.player1 = new Player('player1', 'up', this.fieldWidth, this.fieldDepth);
+    this.player2 = new Player('player2', 'down', this.fieldWidth, this.fieldDepth);
+    this.ball = new Ball();
     
     this.gameLoop = null;
     this.isRunning = false;
@@ -64,7 +64,7 @@ class PongGame {
     // this.checkScoring();
 
     // // Broadcast state to all connected clients
-    // this.broadcastState();
+    this.broadcastState();
   }
 
   updateAI() {
@@ -238,9 +238,9 @@ class PongGame {
     return {
       gameId: this.gameId,
       mode: this.mode,
-      // player1: this.player1.getState(),
-      // player2: this.player2.getState(),
-      // ball: this.ball.getState(),
+      player1: this.player1.getState(),
+      player2: this.player2.getState(),
+      ball: this.ball.getState(),
       fieldWidth: this.fieldWidth,
       fieldDepth: this.fieldDepth,
       isRunning: this.isRunning,
