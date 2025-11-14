@@ -2,22 +2,20 @@
 class Ball {
   constructor() {
     this.x = 0;
+    this.y = 0.4;
     this.z = 0;
-    this.vx = 0;
-    this.vz = 0;
-    this.radius = 0.3;
+    this.vx = 0.15;
+    this.vz = -0.15;
+    this.radius = 0.4;
     this.speed = 0.15;
-    this.reset();
   }
 
-  reset() {
+  reset(direction) {
+    // direction: 'up' (towards negative z) or 'down' (towards positive z)
     this.x = 0;
     this.z = 0;
-    // Random direction
-    const angle = (Math.random() * Math.PI / 2) - Math.PI / 4; // -45° to 45°
-    const direction = Math.random() < 0.5 ? 1 : -1;
-    this.vx = Math.cos(angle) * this.speed * direction;
-    this.vz = Math.sin(angle) * this.speed;
+    this.vx = (Math.random() - 0.5) * this.speed * 2;
+    this.vz = direction === 'up' ? -this.speed : this.speed;
   }
 
   update() {
@@ -27,20 +25,28 @@ class Ball {
 
   reverseX() {
     this.vx *= -1;
-    // Slightly increase speed on paddle hit
-    this.vx *= 1.05;
-    this.vz *= 1.05;
   }
 
   reverseZ() {
     this.vz *= -1;
   }
 
+  // Add spin based on paddle hit position
+  addSpin(paddleX) {
+    const offset = this.x - paddleX;
+    this.vx += offset * 0.05;
+    // Clamp velocity to prevent ball from going too fast horizontally
+    this.vx = Math.max(-0.3, Math.min(0.3, this.vx));
+  }
+
   getState() {
     return {
       x: this.x,
+      y: this.y,
       z: this.z,
-      radius: this.radius
+      radius: this.radius,
+      vx: this.vx,
+      vz: this.vz
     };
   }
 }

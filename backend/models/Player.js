@@ -2,12 +2,12 @@
 class Player {
   constructor(id, side, fieldWidth, fieldDepth) {
     this.id = id;
-    this.side = side; // 'left' or 'right'
-    this.z = side === 'down' ? (fieldDepth / 2 - 1) : (-fieldDepth / 2 + 1); // Position near edge
+    this.side = side; // 'up' or 'down'
+    this.z = side === 'down' ? (fieldDepth / 2 - 1) : (-fieldDepth / 2 + 1);
     this.x = 0; // Center position
-    this.y = 0,4;
-    this.width = 0.5;
-    this.height = 3;
+    this.y = 0.4;
+    this.width = 4; // Paddle width (horizontal)
+    this.height = 0.8; // Paddle depth (vertical)
     this.speed = 0.3;
     this.fieldDepth = fieldDepth;
     this.fieldWidth = fieldWidth;
@@ -16,23 +16,18 @@ class Player {
   }
 
   move(direction) {
-    console.log("dkhalti??");
-    
     if (direction === 'left') {
       this.x -= this.speed;
-      console.log("wa ser liser");
-      
     } else if (direction === 'right') {
       this.x += this.speed;
-      console.log("wa ser limen");    
-    } 
-    // Keep player in bounds
+    }
     
+    // Keep player in bounds
     this.x = Math.max(-this.fieldWidth / 2 + 2, Math.min(this.fieldWidth / 2 - 2, this.x));
   }
 
   reset() {
-    this.z = 0;
+    this.x = 0; // Reset to center position
   }
 
   incrementScore() {

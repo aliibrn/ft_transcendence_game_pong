@@ -112,10 +112,8 @@ class WebSocketHandler {
     }
 
     if (this.mode === 'remote') {
-      // Get game from matchmaking service
       const game = matchmakingService.getGame(this.gameId);
       if (game) {
-        // Use socket's assigned playerId for remote games
         game.handleInput(this.socket.playerId, direction);
       }
     } else if (this.game) {
@@ -124,13 +122,9 @@ class WebSocketHandler {
         case 'local':
           this.game.handleInput(playerId, direction);
           break;
-
         case 'solo':
           break;
       }
-      // if (this.mode === 'local' || (this.mode === 'solo' && playerId === 'player1')) {
-      //   this.game.handleInput(playerId, direction);
-      // }
     }
   }
 
@@ -143,7 +137,6 @@ class WebSocketHandler {
 
   handleRestartGame() {
     if (this.mode !== 'remote' && this.game) {
-      // Restart local or solo game
       this.game.cleanup();
       this.game = new PongGame(this.mode, this.gameId);
       this.game.addPlayer(this.socket);

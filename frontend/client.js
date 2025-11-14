@@ -275,12 +275,14 @@ function initializeGame(state) {
     rightWall.material = wallMat;
 
     // Ball
-    const ball = BABYLON.MeshBuilder.CreateSphere("ball", { diameter: 0.8 }, scene);
+    ball = BABYLON.MeshBuilder.CreateSphere("ball", { diameter: 0.8 }, scene);
     const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
     ballMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
     ballMat.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3);
     ball.material = ballMat;
-    ball.position.y = 0.4;
+    ball.position.y = state.ball.y;
+    ball.position.x = state.ball.x;
+    ball.position.z = state.ball.z;
 
     // Player1 paddle (blue)
     player1Paddle = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
@@ -290,7 +292,7 @@ function initializeGame(state) {
     player1Paddle.material = player1PaddleMat;
     player1Paddle.position.z = state.player1.z;
     player1Paddle.position.y = state.player1.y;
-    // player1Paddle.position.x = state.player1.x;
+    player1Paddle.position.x = state.player1.x;
 
     // player2 paddle (red)
     player2Paddle = BABYLON.MeshBuilder.CreateBox("ai", { width: 4, height: 0.8, depth: 0.8 }, scene);
@@ -300,48 +302,7 @@ function initializeGame(state) {
     player2Paddle.material = player2PaddleMat;
     player2Paddle.position.z = state.player2.z;
     player2Paddle.position.y = state.player2.y;
-    // player2Paddle.position.x = state.player2.x;
-
-
-    // // Player 1 Paddle (left side - blue)
-    // player1Paddle = BABYLON.MeshBuilder.CreateBox(
-    //     "player1",
-    //     { width: state.player1.width, height: 1.5, depth: state.player1.height },
-    //     scene
-    // );
-    // const player1Mat = new BABYLON.StandardMaterial("player1Mat", scene);
-    // player1Mat.diffuseColor = new BABYLON.Color3(0.2, 0.5, 1);
-    // player1Mat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
-    // player1Paddle.material = player1Mat;
-    // player1Paddle.position.y = 0.75;
-
-    // // Player 2 Paddle (right side - red)
-    // player2Paddle = BABYLON.MeshBuilder.CreateBox(
-    //     "player2",
-    //     { width: state.player2.width, height: 1.5, depth: state.player2.height },
-    //     scene
-    // );
-    // const player2Mat = new BABYLON.StandardMaterial("player2Mat", scene);
-    // player2Mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
-    // player2Mat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
-    // player2Paddle.material = player2Mat;
-    // player2Paddle.position.y = 0.75;
-
-    // // Ball
-    // ball = BABYLON.MeshBuilder.CreateSphere(
-    //     "ball",
-    //     { diameter: state.ball.radius * 2 },
-    //     scene
-    // );
-    // const ballMat = new BABYLON.StandardMaterial("ballMat", scene);
-    // ballMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-    // ballMat.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5);
-    // ball.material = ballMat;
-    // ball.position.y = state.ball.radius;
-
-    // // Add glow effect to ball
-    // const gl = new BABYLON.GlowLayer("glow", scene);
-    // gl.intensity = 0.5;
+    player2Paddle.position.x = state.player2.x;
 
     // Start render loop
     engine.runRenderLoop(() => {
@@ -354,27 +315,24 @@ function initializeGame(state) {
     });
 
     // Initial state update
-    // updateGameState(state);
+    updateGameState(state);
 }
 
 // ==================== GAME STATE UPDATE ====================
 function updateGameState(state) {
 
-    if (!player1Paddle || !player2Paddle) return;
-    // || ball
-    console.log("katwsal hna ?");
-    console.log(state);
-
+    if (!player1Paddle || !player2Paddle  || !ball) return;
+    console.log("here");
     // Update paddles
     player1Paddle.position.x = state.player1.x;
     player2Paddle.position.x = state.player2.x;
 
     // Update ball
-    // ball.position.x = state.ball.x;
-    // ball.position.z = state.ball.z;
+    ball.position.x = state.ball.x;
+    ball.position.z = state.ball.z;
 
     // Update scores
-    // updateScores(state.player1.score, state.player2.score);
+    updateScores(state.player1.score, state.player2.score);
 }
 
 // ==================== INPUT HANDLING ====================
