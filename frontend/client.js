@@ -25,6 +25,10 @@ const canvas = document.getElementById('renderCanvas');
 const modeSelection = document.getElementById('modeSelection');
 const statusMessage = document.getElementById('statusMessage');
 const header = document.getElementById('header');
+const matchmaking = document.getElementById('matchmaking');
+const queuePositionEl = document.getElementById('queuePosition');
+const queueListEl = document.getElementById('queueList');
+const cancelMatchmakingBtn = document.getElementById('cancelMatchmaking');
 const gameOverScreen = document.getElementById('gameOverScreen');
 
 const localBtn = document.getElementById('localBtn');
@@ -55,6 +59,39 @@ function hideModeSelection() {
     setTimeout(() => {
         modeSelection.style.display = 'none';
     }, 500);
+}
+
+function showMatchmaking() {
+    matchmaking.classList.add('visible');
+}
+
+function hideMatchmaking() {
+    matchmaking.classList.remove('visible');
+    queueListEl.innerHTML = '';
+}
+
+function updateQueuePosition(position) {
+    queuePositionEl.textContent = position;
+}
+
+function updateQueueList(players, yourConnectionId) {
+    queueListEl.innerHTML = '';
+
+    players.forEach((player, index) => {
+        const isYou = player.connectionId === yourConnectionId;
+        const queueItem = document.createElement('div');
+        queueItem.className = `queue-item ${isYou ? 'you' : ''}`;
+
+        queueItem.innerHTML = `
+            <div class="player-avatar">${isYou ? '👤' : '🎮'}</div>
+            <div class="player-info">
+                <div class="player-name">${isYou ? 'You' : `Player ${index + 1}`}</div>
+                <div class="player-status">${isYou ? 'Ready to play' : 'Waiting...'}</div>
+            </div>
+        `;
+
+        queueListEl.appendChild(queueItem);
+    });
 }
 
 function showModeSelection() {
@@ -166,16 +203,20 @@ function handleServerMessage(message) {
             break;
 
         case 'queueStatus':
-            showStatus(`Waiting for opponent... Position: ${message.data.position}`, 'waiting');
+            updateQueuePosition(message.data.position);
+            if (message.data.playersInQueue) {
+                updateQueueList(message.data.playersInQueue, message.data.yourConnectionId);
+            }
             break;
 
         case 'matchFound':
             gameId = message.data.gameId;
             playerId = message.data.yourSide;
+            hideMatchmaking();
             showStatus("Match found! Starting game...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo('remote');
-            sendToServer('ready');
+            sendToServer('ready',);
             break;
 
         case 'gameCreated':
@@ -184,7 +225,7 @@ function handleServerMessage(message) {
             showStatus("Game created! Get ready...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo(gameMode);
-            sendToServer('ready');
+            sendToServer('readyRemote', message.data);
             break;
 
         case 'gameStarted':
@@ -206,6 +247,11 @@ function handleServerMessage(message) {
             isGameRunning = false;
             showGameOver(message.data.winner, message.data.finalScore);
             break;
+
+        case 'matchmakingTimeout':
+            sendToServer('leaveQueue');
+            hideMatchmaking();
+            resetGame();
 
         case 'opponentDisconnected':
             showStatus(message.data.message, "error");
@@ -341,8 +387,8 @@ function updateGameState(state) {
     updateScores(state.player1.score, state.player2.score);
 }
 
-function Pause_GOAL(){
-    
+function Pause_GOAL() {
+
 }
 
 // ==================== INPUT HANDLING ====================
@@ -393,6 +439,8 @@ localBtn.addEventListener('click', () => {
 remoteBtn.addEventListener('click', () => {
     gameMode = 'remote';
     sendToServer('selectMode', { mode: 'remote' });
+    hideModeSelection();
+    showMatchmaking();
     showStatus("Searching for opponent...", "waiting");
 });
 
@@ -411,6 +459,7 @@ playAgainBtn.addEventListener('click', () => {
         resetGame();
         gameMode = 'remote';
         sendToServer('selectMode', { mode: 'remote' });
+        showMatchmaking();
         showStatus("Searching for opponent...", "waiting");
     } else {
         // For local/solo, restart the same game
@@ -421,6 +470,13 @@ playAgainBtn.addEventListener('click', () => {
 
 mainMenuBtn.addEventListener('click', () => {
     hideGameOver();
+    resetGame();
+});
+
+// Cancel matchmaking button
+cancelMatchmakingBtn.addEventListener('click', () => {
+    sendToServer('leaveQueue');
+    hideMatchmaking();
     resetGame();
 });
 

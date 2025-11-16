@@ -49,7 +49,10 @@ class WebSocketHandler {
         case 'restartGame':
           this.handleRestartGame();
           break;
-
+          
+        case 'readyRemote':
+          this.handleReadyRemote(data.data);
+          break;
         default:
           console.warn(`[${this.connectionId}] Unknown message type:`, data.type);
       }
@@ -86,13 +89,12 @@ class WebSocketHandler {
     }
   }
 
+  handleReadyRemote(data){
+    console.log(data);
+  }
+
   handleReady() {
-    if (this.mode === 'remote') {
-      const game = matchmakingService.getGame(this.gameId);
-      if (game) {
-        game.markPlayerReady(this.socket);
-      }
-    } else if (this.game) {
+     if (this.game) {
       this.game.markPlayerReady(this.socket);
       this.send('gameStarted', {
         message: 'Game started!',

@@ -5,304 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Pong Game</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/5.57.1/babylon.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            overflow: hidden;
-            color: white;
-        }
-
-        /* Mode Selection Screen */
-        #modeSelection {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            z-index: 1000;
-            transition: opacity 0.5s ease;
-        }
-
-        #modeSelection.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .title-section {
-            text-align: center;
-            margin-bottom: 50px;
-        }
-
-        .title-section h1 {
-            font-size: 64px;
-            font-weight: bold;
-            background: linear-gradient(45deg, #3b82f6, #8b5cf6, #ec4899);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 10px;
-            text-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
-        }
-
-        .title-section p {
-            font-size: 18px;
-            color: #94a3b8;
-        }
-
-        .mode-buttons {
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .mode-btn {
-            width: 250px;
-            padding: 40px 30px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            text-align: center;
-        }
-
-        .mode-btn:hover {
-            transform: translateY(-10px);
-            border-color: rgba(59, 130, 246, 0.5);
-            box-shadow: 0 20px 40px rgba(59, 130, 246, 0.3);
-            background: rgba(59, 130, 246, 0.1);
-        }
-
-        .mode-btn .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        .mode-btn h3 {
-            font-size: 24px;
-            margin-bottom: 10px;
-            color: #fff;
-        }
-
-        .mode-btn p {
-            font-size: 14px;
-            color: #94a3b8;
-            line-height: 1.5;
-        }
-
-        /* Status Messages */
-        #statusMessage {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 16px;
-            z-index: 999;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        #statusMessage.visible {
-            opacity: 1;
-        }
-
-        #statusMessage.waiting {
-            border-color: #f59e0b;
-            color: #fbbf24;
-        }
-
-        #statusMessage.connected {
-            border-color: #10b981;
-            color: #34d399;
-        }
-
-        #statusMessage.error {
-            border-color: #ef4444;
-            color: #f87171;
-        }
-
-        /* Game Header */
-        #header {
-            background: rgba(22, 33, 62, 0.8);
-            backdrop-filter: blur(10px);
-            color: white;
-            padding: 20px;
-            display: none;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        #header.visible {
-            display: flex;
-        }
-
-        .score-container {
-            text-align: center;
-            min-width: 100px;
-        }
-
-        .score-label {
-            font-size: 12px;
-            color: #94a3b8;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .score {
-            font-size: 36px;
-            font-weight: bold;
-        }
-
-        .player-color {
-            color: #3b82f6;
-        }
-
-        .ai-color {
-            color: #ef4444;
-        }
-
-        #gameInfo {
-            text-align: center;
-            flex: 1;
-        }
-
-        #gameInfo h2 {
-            font-size: 20px;
-            margin-bottom: 5px;
-        }
-
-        #gameInfo p {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-
-        #renderCanvas {
-            width: 100%;
-            height: calc(100vh - 100px);
-            display: none;
-            outline: none;
-        }
-
-        #renderCanvas.visible {
-            display: block;
-        }
-
-        /* Game Over Screen */
-        #gameOverScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1001;
-        }
-
-        #gameOverScreen.visible {
-            display: flex;
-        }
-
-        .game-over-content {
-            text-align: center;
-            padding: 50px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-        }
-
-        .game-over-content h2 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            background: linear-gradient(45deg, #fbbf24, #f59e0b);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .game-over-content .final-score {
-            font-size: 24px;
-            margin-bottom: 30px;
-            color: #94a3b8;
-        }
-
-        .game-over-buttons {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-        }
-
-        .btn {
-            padding: 15px 40px;
-            font-size: 16px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: bold;
-        }
-
-        .btn-primary {
-            background: linear-gradient(45deg, #3b82f6, #8b5cf6);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Loading Animation */
-        .loading-dots {
-            display: inline-block;
-        }
-
-        .loading-dots::after {
-            content: '.';
-            animation: dots 1.5s steps(3, end) infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css/style.css">
 </head>
 <body>
     <!-- Mode Selection Screen -->
@@ -346,6 +49,35 @@
         <div class="score-container">
             <div class="score-label" id="player2Label">Player 2</div>
             <div id="player2Score" class="score ai-color">0</div>
+        </div>
+    </div>
+
+    <!-- Matchmaking Screen -->
+    <div id="matchmaking">
+        <div class="matchmaking-content">
+            <div class="matchmaking-header">
+                <h2>🌐 Finding Opponent</h2>
+                <p class="queue-position">Position in queue: <span id="queuePosition">-</span></p>
+            </div>
+            
+            <div class="searching-animation">
+                <div class="radar">
+                    <div class="radar-wave"></div>
+                    <div class="radar-wave"></div>
+                    <div class="radar-wave"></div>
+                    <div class="radar-dot"></div>
+                </div>
+                <p class="searching-text">Searching for players<span class="loading-dots"></span></p>
+            </div>
+
+            <div class="players-queue">
+                <h3>Players in Queue</h3>
+                <div id="queueList" class="queue-list">
+                    <!-- Dynamic player items will be inserted here -->
+                </div>
+            </div>
+
+            <button class="btn btn-secondary cancel-btn" id="cancelMatchmaking">Cancel</button>
         </div>
     </div>
 
