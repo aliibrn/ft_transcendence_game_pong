@@ -216,7 +216,7 @@ function handleServerMessage(message) {
             showStatus("Match found! Starting game...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo('remote');
-            sendToServer('ready',);
+            sendToServer('readyRemote', {data: {gameId, playerId, ready: true}});
             break;
 
         case 'gameCreated':
@@ -225,7 +225,7 @@ function handleServerMessage(message) {
             showStatus("Game created! Get ready...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo(gameMode);
-            sendToServer('readyRemote', message.data);
+            sendToServer('ready');
             break;
 
         case 'gameStarted':
@@ -374,12 +374,10 @@ function initializeGame(state) {
 function updateGameState(state) {
 
     if (!player1Paddle || !player2Paddle || !ball) return;
-    console.log("here");
-    // Update paddles
+
     player1Paddle.position.x = state.player1.x;
     player2Paddle.position.x = state.player2.x;
 
-    // Update ball
     ball.position.x = state.ball.x;
     ball.position.z = state.ball.z;
 
@@ -420,11 +418,11 @@ function handleInput() {
             sendToServer('input', { playerId: 'player2', direction: 'right' });
         }
     } else {
-        if (keys['a'] || keys['A'] || keys['ArrowLeft']) {
-            sendToServer('input', { playerId: playerId || 'player1', direction: 'left' });
+        if (keys['d'] || keys['D'] || keys['ArrowLeft']) {
+            sendToServer('input', { playerId: playerId, direction: 'left' });
         }
-        if (keys['d'] || keys['D'] || keys['ArrowRight']) {
-            sendToServer('input', { playerId: playerId || 'player1', direction: 'right' });
+        if (keys['a'] || keys['A'] || keys['ArrowRight']) {
+            sendToServer('input', { playerId: playerId, direction: 'right' });
         }
     }
 }
@@ -439,9 +437,11 @@ localBtn.addEventListener('click', () => {
 remoteBtn.addEventListener('click', () => {
     gameMode = 'remote';
     sendToServer('selectMode', { mode: 'remote' });
-    hideModeSelection();
-    showMatchmaking();
-    showStatus("Searching for opponent...", "waiting");
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        hideModeSelection();
+        showMatchmaking();
+        showStatus("Searching for opponent...", "waiting");
+    }
 });
 
 soloBtn.addEventListener('click', () => {

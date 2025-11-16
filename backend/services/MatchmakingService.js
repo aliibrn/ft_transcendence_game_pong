@@ -6,68 +6,22 @@ class MatchmakingService {
     this.activeGames = new Map();
   }
 
-  //   addToQueue(socket, playerId) {
-  //   console.log(`[Matchmaking] request received for ${playerId}`);
+  addToQueue(socket, connectionId) {
+    console.log(`[Matchmaking] Player ${connectionId} added to queue`);
 
-  //   // Optional 3s delay (remove if not needed)
-  //   // setTimeout(() => {
-  //   // avoid duplicates
-  //   if (this.queue.some(p => p.playerId === playerId)) {
-  //     console.log('already queued');
-  //     return;
-  //   }
-
-  //   const player = {
-  //     socket,
-  //     playerId,
-  //     joinedAt: Date.now(),
-  //     timeoutId: null
-  //   };
-
-  //   player.timeoutId = setTimeout(() => {
-  //     // double-check still queued
-  //     const still = this.queue.find(p => p.playerId === playerId);
-  //     if (!still) return;
-
-  //     if (socket && socket.readyState === WebSocket.OPEN) {
-  //       socket.send(JSON.stringify('matchmakingTimeout'));
-  //     }
-
-  //     // remove and cleanup
-  //     this.queue = this.queue.filter(p => p.playerId !== playerId);
-  //     console.log(`[Matchmaking] ${playerId} timed out`);
-  //   }, 30000);
-
-  //   this.queue.push(player);
-
-  //   // send accurate position
-  //   const pos = this.queue.findIndex(p => p.playerId === playerId) + 1;
-  //   if (socket && socket.readyState === WebSocket.OPEN) {
-  //     socket.send(JSON.stringify({ type: 'queueStatus', data: { status: 'waiting', position: pos } }));
-  //   }
-
-  //   // attempt to match
-  //   this.tryMatch();
-  //   // }, 300);
-  // }
-
-
-  addToQueue(socket, playerId) {
-    console.log(`[Matchmaking] Player ${playerId} added to queue`);
-
-    if (this.queue.some(p => p.playerId === playerId)) {
+    if (this.queue.some(p => p.connectionId === connectionId)) {
       console.log('already queued');
       return;
     }
 
     const player = {
       socket,
-      playerId,
+      connectionId,
       joinedAt: Date.now(),
     }
 
     player.timeoutID = setTimeout(() => {
-      const still = this.queue.find(p => p.playerId === playerId);
+      const still = this.queue.find(p => p.playerId === connectionId);
       if (!still) return;
 
       if (socket && socket.readyState === 1) {
@@ -109,31 +63,31 @@ class MatchmakingService {
     game.addPlayer(player1Data.socket);
     game.addPlayer(player2Data.socket);
 
-    player1Data.socket.playerId = 'player1';
-    player2Data.socket.playerId = 'player2';
+    game.player1.socket = player1Data.socket;
+    game.player2.socket = player2Data.socket;
 
     this.activeGames.set(gameId, game);
 
-    this.notifyMatchFound(player1Data.socket, player2Data.socket, gameId, game);
+    this.notifyMatchFound(game);
 
     console.log(`[Matchmaking] Match created: ${gameId}`);
   }
 
-  notifyMatchFound(socket1, socket2, gameId, game) {
+  notifyMatchFound(game) {
     const matchData = {
-      gameId,
+      gameId: game.gameId,
       yourSide: 'player1',
       initialState: game.getState()
     };
 
-    socket1.send(JSON.stringify({
+    game.player1.socket.send(JSON.stringify({
       type: 'matchFound',
-      data: { ...matchData, yourSide: 'player1' }
+      data: { ...matchData, yourSide: game.player1.id }
     }));
 
-    socket2.send(JSON.stringify({
+    game.player2.socket.send(JSON.stringify({
       type: 'matchFound',
-      data: { ...matchData, yourSide: 'player2' }
+      data: { ...matchData, yourSide: game.player1.id }
     }));
   }
 

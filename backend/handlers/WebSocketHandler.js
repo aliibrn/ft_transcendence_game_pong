@@ -49,7 +49,7 @@ class WebSocketHandler {
         case 'restartGame':
           this.handleRestartGame();
           break;
-          
+
         case 'readyRemote':
           this.handleReadyRemote(data.data);
           break;
@@ -69,8 +69,6 @@ class WebSocketHandler {
     }
 
     this.mode = mode;
-    
-    // if mode === AI or solo we need to have the diffucalty 
 
     console.log(`[${this.connectionId}] Mode selected: ${mode}`);
 
@@ -89,12 +87,20 @@ class WebSocketHandler {
     }
   }
 
-  handleReadyRemote(data){
-    console.log(data);
+  handleReadyRemote(data) {
+    this.game = matchmakingService.getGame(data.gameId);
+    this.gameId = data.gameId;
+    this.playerId = data.playerId;
+
+    if (!this.game) {
+      console.warn(`[handleReadyRemote] Game ${data.gameId} not found`);
+      return;
+    }
+    this.game.markPlayerReady(this.socket);
   }
 
   handleReady() {
-     if (this.game) {
+    if (this.game) {
       this.game.markPlayerReady(this.socket);
       this.send('gameStarted', {
         message: 'Game started!',
@@ -111,12 +117,11 @@ class WebSocketHandler {
     }
 
     if (this.mode === 'remote') {
-      const game = matchmakingService.getGame(this.gameId);
       if (game) {
-        game.handleInput(this.socket.playerId, direction);
+        this.game.handleInput(playerId, direction);
       }
-    } 
-    else if (this.game)
+    }
+    else if (this.game && (this.mode === 'local' || this.mode === 'solo'))
       this.game.handleInput(playerId, direction);
   }
 
