@@ -1,4 +1,3 @@
-// controllers/GameController.js
 const WebSocketHandler = require('../handlers/WebSocketHandler');
 const matchmakingService = require('../services/MatchmakingService');
 
@@ -16,7 +15,6 @@ function handleNewConnection(socket) {
   console.log(`[Controller] Queue size: ${matchmakingService.getQueueSize()}`);
   console.log(`[Controller] Active games: ${matchmakingService.getActiveGamesCount()}`);
 
-  // Cleanup on disconnect
   socket.on('close', () => {
     activeConnections.delete(connectionId);
     console.log(`[Controller] Connection closed: ${connectionId}`);

@@ -1,11 +1,10 @@
-// models/PongGame.js
 const Player = require('./Player');
 const Ball = require('./Ball');
 
 class PongGame {
   constructor(mode, gameId) {
     this.gameId = gameId;
-    this.mode = mode; // 'local', 'remote', 'solo'
+    this.mode = mode;
     this.fieldWidth = 20;
     this.fieldDepth = 30;
     this.maxScore = 5;
@@ -18,8 +17,7 @@ class PongGame {
     this.isRunning = false;
     this.winner = null;
 
-    // For matchmaking
-    this.players = []; // Will store socket references for remote mode
+    this.players = [];
     this.readyPlayers = new Set();
   }
 
@@ -27,9 +25,8 @@ class PongGame {
     if (this.isRunning) return;
 
     this.isRunning = true;
-    this.ball.reset('up'); // Start ball going up
+    this.ball.reset('up');
 
-    // Start game loop (60 FPS)
     this.gameLoop = setInterval(() => {
       this.update();
     }, 1000 / 60);
@@ -46,53 +43,50 @@ class PongGame {
     console.log(`[${this.gameId}] Game stopped`);
   }
 
+  pause(duration) {
+    if (!this.isRunning || this.isPaused) return;
+
+    this.isPaused = true;
+    console.log(`[${this.gameId}] Game paused for ${duration}ms`);
+
+    setTimeout(() => {
+      this.isPaused = false;
+      console.log(`[${this.gameId}] Game resumed`);
+    }, duration);
+  }
+
   update() {
     if (!this.isRunning) return;
 
-    // AI logic for solo mode
-    if (this.mode === 'solo') {
+    if (this.mode === 'solo')
       this.updateAI();
-    }
 
-    // Update ball position
     this.ball.update();
-
-    // Check collisions
     this.checkCollisions();
-
-    // Check scoring
     this.checkScoring();
-
-    // Broadcast state to all connected clients
     this.broadcastState();
   }
 
   updateAI() {
-    // Simple AI: follow the ball (player2 is AI)
     const aiPlayer = this.player2;
     const aiSpeed = 0.2;
-    
-    if (this.ball.x < aiPlayer.x) {
+
+    if (this.ball.x < aiPlayer.x)
       aiPlayer.x -= aiSpeed;
-    } else if (this.ball.x > aiPlayer.x) {
+    else if (this.ball.x > aiPlayer.x)
       aiPlayer.x += aiSpeed;
-    }
-    
-    // Keep AI in bounds
+
     aiPlayer.x = Math.max(-this.fieldWidth / 2 + 2, Math.min(this.fieldWidth / 2 - 2, aiPlayer.x));
   }
 
   checkCollisions() {
     const halfWidth = this.fieldWidth / 2;
 
-    // Ball collision with side walls (left/right)
-    if (this.ball.x <= -halfWidth + 0.4 || this.ball.x >= halfWidth - 0.4) {
+    if (this.ball.x <= -halfWidth + 0.4 || this.ball.x >= halfWidth - 0.4)
       this.ball.reverseX();
-    }
 
-    // Paddle collisions
-    this.checkPaddleCollision(this.player1); // bottom paddle (down)
-    this.checkPaddleCollision(this.player2); // top paddle (up)
+    this.checkPaddleCollision(this.player1);
+    this.checkPaddleCollision(this.player2);
   }
 
   checkPaddleCollision(player) {
@@ -101,22 +95,16 @@ class PongGame {
     const paddleHalfWidth = player.width / 2;
     const paddleHalfDepth = player.height / 2;
 
-    // Check if ball is within paddle bounds
     const withinX = Math.abs(ball.x - player.x) < paddleHalfWidth + ballRadius;
     const withinZ = ball.z >= player.z - paddleHalfDepth - ballRadius &&
-                    ball.z <= player.z + paddleHalfDepth + ballRadius;
+      ball.z <= player.z + paddleHalfDepth + ballRadius;
 
     if (withinX && withinZ) {
-      // Determine bounce direction based on paddle position
-      if (player.side === 'down') {
-        // Player at bottom (positive z) - bounce ball upward (negative z)
+      if (player.side === 'down')
         ball.vz = -Math.abs(ball.vz);
-      } else {
-        // Player at top (negative z) - bounce ball downward (positive z)
+      else
         ball.vz = Math.abs(ball.vz);
-      }
 
-      // Add spin based on where ball hits paddle
       ball.addSpin(player.x);
     }
   }
@@ -124,12 +112,10 @@ class PongGame {
   checkScoring() {
     const halfDepth = this.fieldDepth / 2;
 
-    // Ball goes past bottom (player1 missed)
     if (this.ball.z > halfDepth) {
       this.player2.incrementScore();
       this.onScore('player2');
     }
-    // Ball goes past top (player2 missed)
     else if (this.ball.z < -halfDepth) {
       this.player1.incrementScore();
       this.onScore('player1');
@@ -138,17 +124,18 @@ class PongGame {
 
   onScore(scorer) {
     console.log(`[${this.gameId}] ${scorer} scored!`);
-    
-    // Determine ball direction based on who scored
-    // If player2 scored, send ball down toward player1
-    // If player1 scored, send ball up toward player2
+
+    // this.pause(300);
+
+    // // Broadcast GOAL event immediately
+    // this.broadcastGoal(scorer);
+
     const ballDirection = scorer === 'player2' ? 'down' : 'up';
     this.ball.reset(ballDirection);
-    
+
     this.player1.reset();
     this.player2.reset();
 
-    // Check for winner
     if (this.player1.score >= this.maxScore) {
       this.winner = 'player1';
       this.endGame();
@@ -174,11 +161,37 @@ class PongGame {
     }
   }
 
+  // broadcastGoal(scorer) {
+  //   const state = this.getState();
+  //   const goalData = {
+  //     state,
+  //     scorer: scorer,
+  //     isPaused: this.isPaused
+  //   };
+
+  //   if (this.mode === 'remote') {
+  //     this.players.forEach(playerSocket => {
+  //       if (playerSocket && playerSocket.readyState === 1) {
+  //         playerSocket.send(JSON.stringify({
+  //           type: 'GOAL',
+  //           data: goalData
+  //         }));
+  //       }
+  //     });
+  //   } else {
+  //     if (this.players[0] && this.players[0].readyState === 1) {
+  //       this.players[0].send(JSON.stringify({
+  //         type: 'GOAL',
+  //         data: goalData
+  //       }));
+  //     }
+  //   }
+  // }
+
   broadcastState() {
     const state = this.getState();
 
     if (this.mode === 'remote') {
-      // Send to both players
       this.players.forEach(playerSocket => {
         if (playerSocket && playerSocket.readyState === 1) {
           playerSocket.send(JSON.stringify({
@@ -188,7 +201,6 @@ class PongGame {
         }
       });
     } else {
-      // Local or solo: send to single client
       if (this.players[0] && this.players[0].readyState === 1) {
         this.players[0].send(JSON.stringify({
           type: 'update',
@@ -234,11 +246,9 @@ class PongGame {
   markPlayerReady(socket) {
     this.readyPlayers.add(socket);
 
-    // For remote mode, start when both players are ready
     if (this.mode === 'remote' && this.readyPlayers.size === 2) {
       this.start();
     }
-    // For local/solo, start immediately when ready
     else if (this.mode !== 'remote') {
       this.start();
     }

@@ -102,15 +102,15 @@ function updateScores(player1Score, player2Score) {
 function updateGameInfo(mode) {
     if (mode === 'local') {
         gameModeEl.textContent = 'Local Mode';
-        controlsInfoEl.textContent = 'P1: W/S | P2: ↑/↓';
+        controlsInfoEl.textContent = 'P1: A/D | P2: J/L';
         player2LabelEl.textContent = 'Player 2';
     } else if (mode === 'solo') {
         gameModeEl.textContent = 'vs AI Mode';
-        controlsInfoEl.textContent = 'W/S or ↑/↓ to move';
+        controlsInfoEl.textContent = 'A/D or ↑/↓ to move';
         player2LabelEl.textContent = 'AI';
     } else if (mode === 'remote') {
         gameModeEl.textContent = 'Online Mode';
-        controlsInfoEl.textContent = 'W/S or ↑/↓ to move';
+        controlsInfoEl.textContent = 'A/D or ↑/↓ to move';
         player2LabelEl.textContent = playerId === 'player1' ? 'Opponent' : 'Opponent';
     }
 }
@@ -195,6 +195,12 @@ function handleServerMessage(message) {
         case 'update':
             updateGameState(message.data);
             break;
+
+        // case 'GOAL':
+        //     setTimeout(() => {
+
+        //     }, 3000);        
+        //     break;
 
         case 'gameEnd':
             isGameRunning = false;
@@ -321,7 +327,7 @@ function initializeGame(state) {
 // ==================== GAME STATE UPDATE ====================
 function updateGameState(state) {
 
-    if (!player1Paddle || !player2Paddle  || !ball) return;
+    if (!player1Paddle || !player2Paddle || !ball) return;
     console.log("here");
     // Update paddles
     player1Paddle.position.x = state.player1.x;
@@ -333,6 +339,10 @@ function updateGameState(state) {
 
     // Update scores
     updateScores(state.player1.score, state.player2.score);
+}
+
+function Pause_GOAL(){
+    
 }
 
 // ==================== INPUT HANDLING ====================
@@ -350,21 +360,20 @@ function handleInput() {
 
     if (gameMode === 'local') {
         // Player 1: W/S
-        if (keys['a'] || keys['A']) {
+        if (keys['d'] || keys['D']) {
             sendToServer('input', { playerId: 'player1', direction: 'left' });
         }
-        if (keys['d'] || keys['D']) {
+        if (keys['a'] || keys['A']) {
             sendToServer('input', { playerId: 'player1', direction: 'right' });
         }
         // Player 2: Arrow Keys
-        if (keys['j'] || keys['J']) {
+        if (keys['l'] || keys['L']) {
             sendToServer('input', { playerId: 'player2', direction: 'left' });
         }
-        if (keys['l'] || keys['L']) {
+        if (keys['j'] || keys['J']) {
             sendToServer('input', { playerId: 'player2', direction: 'right' });
         }
     } else {
-        // Solo or Remote: Use either W/S or Arrow Keys
         if (keys['a'] || keys['A'] || keys['ArrowLeft']) {
             sendToServer('input', { playerId: playerId || 'player1', direction: 'left' });
         }

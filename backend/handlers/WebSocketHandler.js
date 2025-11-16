@@ -1,4 +1,3 @@
-// handlers/WebSocketHandler.js
 const PongGame = require('../models/PongGame');
 const matchmakingService = require('../services/MatchmakingService');
 
@@ -19,7 +18,6 @@ class WebSocketHandler {
     this.socket.on('close', () => this.handleClose());
     this.socket.on('error', (err) => this.handleError(err));
 
-    // Send connection acknowledgment
     this.send('connected', {
       connectionId: this.connectionId,
       timestamp: Date.now()
@@ -68,13 +66,14 @@ class WebSocketHandler {
     }
 
     this.mode = mode;
+    
+    // if mode === AI or solo we need to have the diffucalty 
+
     console.log(`[${this.connectionId}] Mode selected: ${mode}`);
 
     if (mode === 'remote') {
-      // Add to matchmaking queue
       matchmakingService.addToQueue(this.socket, this.connectionId);
     } else {
-      // Create local or solo game immediately
       this.gameId = `${mode}_${this.connectionId}_${Date.now()}`;
       this.game = new PongGame(mode, this.gameId);
       this.game.addPlayer(this.socket);
@@ -89,13 +88,11 @@ class WebSocketHandler {
 
   handleReady() {
     if (this.mode === 'remote') {
-      // For remote mode, game is managed by matchmaking service
       const game = matchmakingService.getGame(this.gameId);
       if (game) {
         game.markPlayerReady(this.socket);
       }
     } else if (this.game) {
-      // For local/solo mode
       this.game.markPlayerReady(this.socket);
       this.send('gameStarted', {
         message: 'Game started!',
@@ -116,16 +113,9 @@ class WebSocketHandler {
       if (game) {
         game.handleInput(this.socket.playerId, direction);
       }
-    } else if (this.game) {
-
-      switch (this.mode) {
-        case 'local':
-          this.game.handleInput(playerId, direction);
-          break;
-        case 'solo':
-          break;
-      }
-    }
+    } 
+    else if (this.game)
+      this.game.handleInput(playerId, direction);
   }
 
   handleLeaveQueue() {
@@ -170,7 +160,6 @@ class WebSocketHandler {
     this.handleClose();
   }
 
-  // Called by matchmaking when match is found
   setGameInfo(gameId, playerId) {
     this.gameId = gameId;
     this.playerId = playerId;

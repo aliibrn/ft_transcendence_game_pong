@@ -1,4 +1,3 @@
-// models/Ball.js
 class Ball {
   constructor() {
     this.x = 0;
@@ -11,7 +10,6 @@ class Ball {
   }
 
   reset(direction) {
-    // direction: 'up' (towards negative z) or 'down' (towards positive z)
     this.x = 0;
     this.z = 0;
     this.vx = (Math.random() - 0.5) * this.speed * 2;
@@ -31,11 +29,9 @@ class Ball {
     this.vz *= -1;
   }
 
-  // Add spin based on paddle hit position
   addSpin(paddleX) {
     const offset = this.x - paddleX;
     this.vx += offset * 0.05;
-    // Clamp velocity to prevent ball from going too fast horizontally
     this.vx = Math.max(-0.3, Math.min(0.3, this.vx));
   }
 
