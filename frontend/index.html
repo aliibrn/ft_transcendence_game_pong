@@ -4,101 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Pong Game</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/5.57.1/babylon.min.js"></script>
     <link rel="stylesheet" href="style.css/style.css">
+    <!-- Babylon.js -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
-    <!-- Mode Selection Screen -->
-    <div id="modeSelection">
-        <div class="title-section">
-            <h1>3D PONG</h1>
-            <p>Choose your game mode</p>
-        </div>
-        <div class="mode-buttons">
-            <div class="mode-btn" id="localBtn">
-                <div class="icon">🎮</div>
-                <h3>Local</h3>
-                <p>Play with a friend on the same keyboard</p>
+
+    <!-- Main Game Container -->
+    <div id="gameContainer" class="hidden">
+        <!-- Game Header (HUD) -->
+        <div id="header">
+            <div class="score">
+                <span id="player1Label">PLAYER 1</span>
+                <span id="player1Score">0</span>
             </div>
-            <div class="mode-btn" id="remoteBtn">
-                <div class="icon">🌐</div>
-                <h3>Online</h3>
-                <p>Play against a random opponent online</p>
+            <div class="game-info">
+                <div id="gameMode"></div>
+                <div id="gameTimer">02:00</div>
+                <div id="controlsInfo"></div>
             </div>
-            <div class="mode-btn" id="soloBtn">
-                <div class="icon">🤖</div>
-                <h3>vs AI</h3>
-                <p>Practice against the computer</p>
+            <div class="score">
+                <span id="player2Label">PLAYER 2</span>
+                <span id="player2Score">0</span>
             </div>
         </div>
+
+        <!-- The 3D Canvas -->
+        <canvas id="renderCanvas"></canvas>
+
+        <!-- On-Screen Overlays -->
+        <div id="gameCountdown" class="hidden"></div>
+        <div id="goalMessage" class="hidden"></div>
     </div>
 
-    <!-- Status Message -->
-    <div id="statusMessage"></div>
-
-    <!-- Countdown Display -->
-    <div id="countdown">3</div>
-
-    <!-- Game Header -->
-    <div id="header">
-        <div class="score-container">
-            <div class="score-label">Player 1</div>
-            <div id="player1Score" class="score player-color">0</div>
-        </div>
-        <div id="gameInfo">
-            <h2 id="gameMode">Local Mode</h2>
-            <p id="controlsInfo">P1: A/D | P2: J/L</p>
-        </div>
-        <div class="score-container">
-            <div class="score-label" id="player2Label">Player 2</div>
-            <div id="player2Score" class="score ai-color">0</div>
-        </div>
+    <!-- Mode Selection Screen (Main Menu) -->
+    <div id="modeSelection">
+        <h1>3D PONG</h1>
+        <button id="soloBtn" class="btn">VS AI</button>
+        <button id="localBtn" class="btn">Local Play</button>
+        <button id="remoteBtn" class="btn">Find Match</button>
     </div>
 
     <!-- Matchmaking Screen -->
-    <div id="matchmaking">
-        <div class="matchmaking-content">
-            <div class="matchmaking-header">
-                <h2>🌐 Finding Opponent</h2>
-                <p class="queue-position">Position in queue: <span id="queuePosition">-</span></p>
-            </div>
-            
-            <div class="searching-animation">
-                <div class="radar">
-                    <div class="radar-wave"></div>
-                    <div class="radar-wave"></div>
-                    <div class="radar-wave"></div>
-                    <div class="radar-dot"></div>
-                </div>
-                <p class="searching-text">Searching for players<span class="loading-dots"></span></p>
-            </div>
-
-            <div class="players-queue">
-                <h3>Players in Queue</h3>
-                <div id="queueList" class="queue-list">
-                    <!-- Dynamic player items will be inserted here -->
-                </div>
-            </div>
-
-            <button class="btn btn-secondary cancel-btn" id="cancelMatchmaking">Cancel</button>
-        </div>
+    <div id="matchmaking" class="hidden">
+        <h2>Finding Opponent...</h2>
+        <div class="spinner"></div>
+        <div id="queuePosition">Position: 1</div>
+        <button id="cancelMatchmaking" class="btn btn-danger">Cancel</button>
     </div>
-
-    <!-- Game Canvas -->
-    <canvas id="renderCanvas"></canvas>
 
     <!-- Game Over Screen -->
-    <div id="gameOverScreen">
-        <div class="game-over-content">
-            <h2 id="winnerText">Player 1 Wins!</h2>
-            <div class="final-score" id="finalScore">5 - 3</div>
-            <div class="game-over-buttons">
-                <button class="btn btn-primary" id="playAgainBtn">Play Again</button>
-                <button class="btn btn-secondary" id="mainMenuBtn">Main Menu</button>
-            </div>
-        </div>
+    <div id="gameOverScreen" class="hidden">
+        <h2>Game Over</h2>
+        <h3 id="winnerText">You Win!</h3>
+        <p id="finalScore">5 - 3</p>
+        <button id="playAgainBtn" class="btn">Play Again</button>
+        <button id="mainMenuBtn" class="btn">Main Menu</button>
     </div>
 
+    <!-- Connection Status -->
+    <div id="statusMessage"></div>
+
+    <!-- Client-side Logic -->
     <script src="client.js"></script>
 </body>
 </html>

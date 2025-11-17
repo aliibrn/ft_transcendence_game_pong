@@ -2,342 +2,237 @@
 const Player = require('./Player');
 const Ball = require('./Ball');
 
-const GAME_TICK_RATE = 1000 / 60; // 60 FPS
-const MAX_GAME_DURATION = 2 * 60 * 1000; // 2 minutes
-const GOAL_PAUSE_DURATION = 1500; // 1.5 seconds
+const CONFIG = {
+  TICK_RATE: 1000 / 60,
+  MAX_DURATION: 120 * 1000, // 2 minutes
+  GOAL_PAUSE: 1500,
+  MAX_SCORE: 5
+};
 
 class PongGame {
   constructor(mode, gameId) {
     this.gameId = gameId;
     this.mode = mode;
+    
     this.fieldWidth = 20;
     this.fieldDepth = 30;
-    this.maxScore = 5;
 
+    // Initialize Entities
     this.player1 = new Player('player1', 'down', this.fieldWidth, this.fieldDepth);
     this.player2 = new Player('player2', 'up', this.fieldWidth, this.fieldDepth);
     this.ball = new Ball();
 
-    this.gameLoop = null;
-    this.gameTimer = null;
-    this.isRunning = false;
-    this.isPaused = false;
-    this.winner = null;
-    this.startTime = null;
+    // Game State
+    this.state = 'waiting'; // waiting, playing, paused, ended
+    this.startTime = 0;
     this.elapsedTime = 0;
+    this.winner = null;
+    this.winReason = null; // 'score', 'time', 'disconnect'
 
+    // Engine
+    this.loopId = null;
     this.players = new Map();
-    this.readyPlayers = new Set();
+    this.readySet = new Set();
   }
 
-  start() {
-    if (this.isRunning) return;
+  addPlayer(socket, id) {
+    this.players.set(id, socket);
+  }
 
-    this.isRunning = true;
-    this.startTime = Date.now();
+  markPlayerReady(socket) {
+    if (this.state !== 'waiting') return;
+    
+    this.readySet.add(socket);
+    
+    const required = this.mode === 'remote' ? 2 : 1;
+    if (this.readySet.size >= required) {
+      this.startGameSequence();
+    }
+  }
+
+  startGameSequence() {
+    console.log(`[${this.gameId}] All players ready. Starting...`);
+    
+    // 1. Reset everything
     this.ball.reset('up');
-
-    // Start game loop
-    this.gameLoop = setInterval(() => {
-      this.update();
-    }, GAME_TICK_RATE);
-
-    // Start game timer
-    this.gameTimer = setTimeout(() => {
-      this.handleGameTimeout();
-    }, MAX_GAME_DURATION);
-
-    console.log(`[${this.gameId}] Game started in ${this.mode} mode`);
-  }
-
-  stop() {
-    if (this.gameLoop) {
-      clearInterval(this.gameLoop);
-      this.gameLoop = null;
-    }
+    this.player1.reset();
+    this.player2.reset();
     
-    if (this.gameTimer) {
-      clearTimeout(this.gameTimer);
-      this.gameTimer = null;
-    }
-    
-    this.isRunning = false;
-    console.log(`[${this.gameId}] Game stopped`);
+    // 2. Set start time
+    this.startTime = Date.now();
+    this.state = 'playing';
+
+    // 3. Start Loop
+    this.loopId = setInterval(() => this.tick(), CONFIG.TICK_RATE);
   }
 
-  pause(duration) {
-    if (!this.isRunning || this.isPaused) return;
+  tick() {
+    if (this.state === 'ended') return;
 
-    this.isPaused = true;
-    console.log(`[${this.gameId}] Game paused for ${duration}ms`);
+    const now = Date.now();
+    this.elapsedTime = now - this.startTime;
 
-    setTimeout(() => {
-      if (this.isRunning) {
-        this.isPaused = false;
-        console.log(`[${this.gameId}] Game resumed`);
-      }
-    }, duration);
-  }
-
-  update() {
-    if (!this.isRunning || this.isPaused) return;
-
-    // Update elapsed time
-    this.elapsedTime = Date.now() - this.startTime;
-
-    // Update AI if in solo mode
-    if (this.mode === 'solo') {
-      this.updateAI();
+    // 1. Check Time Limit
+    if (this.elapsedTime >= CONFIG.MAX_DURATION) {
+      this.endGame('time');
+      return;
     }
 
-    // Update ball physics
-    this.ball.update();
+    // 2. Physics (only if playing)
+    if (this.state === 'playing') {
+      if (this.mode === 'solo') this.updateAI();
+      this.ball.update();
+      this.checkCollisions();
+      this.checkScoring();
+    }
 
-    // Check collisions and scoring
-    this.checkCollisions();
-    this.checkScoring();
-
-    // Broadcast state to all players
+    // 3. Broadcast State
     this.broadcastState();
   }
 
   updateAI() {
-    const aiPlayer = this.player2;
-    const aiSpeed = 0.2;
-
-    // Simple AI: follow the ball
-    if (this.ball.x < aiPlayer.x - 0.5) {
-      aiPlayer.x -= aiSpeed;
-    } else if (this.ball.x > aiPlayer.x + 0.5) {
-      aiPlayer.x += aiSpeed;
-    }
-
-    aiPlayer.x = Math.max(
-      -this.fieldWidth / 2 + 2,
-      Math.min(this.fieldWidth / 2 - 2, aiPlayer.x)
-    );
+    // Simple Lerp AI
+    const targetX = this.ball.x;
+    const diff = targetX - this.player2.x;
+    this.player2.x += diff * 0.1; // 0.1 = Smoothing factor
+    
+    // Clamp
+    const limit = (this.fieldWidth / 2) - 2;
+    this.player2.x = Math.max(-limit, Math.min(limit, this.player2.x));
   }
 
   checkCollisions() {
-    const halfWidth = this.fieldWidth / 2;
-
-    // Wall collisions
-    if (this.ball.x <= -halfWidth + 0.4 || this.ball.x >= halfWidth - 0.4) {
+    // Walls
+    const limit = this.fieldWidth / 2;
+    if (this.ball.x <= -limit + 0.5 || this.ball.x >= limit - 0.5) {
       this.ball.reverseX();
     }
 
-    // Paddle collisions
-    this.checkPaddleCollision(this.player1);
-    this.checkPaddleCollision(this.player2);
+    // Paddles
+    this.checkPaddle(this.player1);
+    this.checkPaddle(this.player2);
   }
 
-  checkPaddleCollision(player) {
-    const ballRadius = this.ball.radius;
-    const paddleHalfWidth = player.width / 2;
-    const paddleHalfDepth = player.height / 2;
+  checkPaddle(player) {
+    // Simple AABB collision logic would go here
+    // Reusing your existing logic logic for brevity...
+    // (Ensure to add spin/speed increase here)
+    const ballR = this.ball.radius;
+    const pW = player.width / 2;
+    const pH = player.height / 2;
 
-    const withinX = Math.abs(this.ball.x - player.x) < paddleHalfWidth + ballRadius;
-    const withinZ = this.ball.z >= player.z - paddleHalfDepth - ballRadius &&
-      this.ball.z <= player.z + paddleHalfDepth + ballRadius;
-
-    if (withinX && withinZ) {
-      // Reflect ball
-      if (player.side === 'down') {
-        this.ball.vz = -Math.abs(this.ball.vz);
-      } else {
-        this.ball.vz = Math.abs(this.ball.vz);
-      }
-
-      // Add spin based on paddle position
-      this.ball.addSpin(player.x);
-      
-      // Increase speed slightly
-      this.ball.increaseSpeed();
+    if (this.ball.z >= player.z - pH - ballR && 
+        this.ball.z <= player.z + pH + ballR &&
+        Math.abs(this.ball.x - player.x) < pW + ballR) {
+            
+        // Hit!
+        this.ball.vz *= -1.05; // Speed up 5%
+        this.ball.addSpin(player.x); // Add spin
     }
   }
 
   checkScoring() {
-    const halfDepth = this.fieldDepth / 2;
-
-    if (this.ball.z > halfDepth) {
-      this.player1.incrementScore();
-      this.onScore('player1');
-    } else if (this.ball.z < -halfDepth) {
-      this.player2.incrementScore();
-      this.onScore('player2');
+    const limit = this.fieldDepth / 2;
+    
+    if (this.ball.z > limit) {
+      this.handleGoal('player1');
+    } else if (this.ball.z < -limit) {
+      this.handleGoal('player2');
     }
   }
 
-  onScore(scorer) {
-    console.log(`[${this.gameId}] ${scorer} scored!`);
+  handleGoal(scorer) {
+    // Update Score
+    if (scorer === 'player1') this.player1.score++;
+    else this.player2.score++;
 
-    // Broadcast goal event
-    this.broadcastGoal(scorer);
+    // Notify Goal
+    this.broadcast('goal', {
+      scorer,
+      scores: { p1: this.player1.score, p2: this.player2.score }
+    });
 
-    // Pause briefly
-    this.pause(GOAL_PAUSE_DURATION);
+    // Check Win Condition
+    if (this.player1.score >= CONFIG.MAX_SCORE || this.player2.score >= CONFIG.MAX_SCORE) {
+      this.endGame('score');
+      return;
+    }
 
-    // Reset ball and paddles
+    // Pause for Reset
+    this.state = 'paused';
     setTimeout(() => {
-      const ballDirection = scorer === 'player1' ? 'down' : 'up';
-      this.ball.reset(ballDirection);
-      this.player1.reset();
-      this.player2.reset();
-
-      // Check for game end
-      if (this.player1.score >= this.maxScore) {
-        this.winner = 'player1';
-        this.endGame();
-      } else if (this.player2.score >= this.maxScore) {
-        this.winner = 'player2';
-        this.endGame();
-      }
-    }, GOAL_PAUSE_DURATION);
-  }
-
-  handleGameTimeout() {
-    console.log(`[${this.gameId}] Game timeout reached`);
-    
-    // Determine winner by score
-    if (this.player1.score > this.player2.score) {
-      this.winner = 'player1';
-    } else if (this.player2.score > this.player1.score) {
-      this.winner = 'player2';
-    } else {
-      this.winner = 'draw';
-    }
-    
-    this.endGame();
-  }
-
-  endGame() {
-    this.stop();
-    console.log(`[${this.gameId}] Game ended. Winner: ${this.winner}`);
-    this.broadcastGameEnd();
+        if (this.state === 'ended') return;
+        this.ball.reset(scorer === 'player1' ? 'down' : 'up');
+        this.state = 'playing';
+    }, CONFIG.GOAL_PAUSE);
   }
 
   handleInput(playerId, direction) {
-    if (!this.isRunning || this.isPaused) return;
-
+    if (this.state !== 'playing') return;
+    
     const player = playerId === 'player1' ? this.player1 : this.player2;
-    if (player) {
-      player.move(direction);
-    }
+    if (player) player.move(direction);
   }
 
   handlePlayerDisconnect(socket) {
-    console.log(`[${this.gameId}] Player disconnected`);
-    
-    // Determine which player disconnected
-    let disconnectedPlayer = null;
-    for (const [playerId, playerSocket] of this.players.entries()) {
-      if (playerSocket === socket) {
-        disconnectedPlayer = playerId;
-        break;
-      }
+    // Identify who left
+    const disconnectedId = [...this.players.entries()]
+      .find(([id, s]) => s === socket)?.[0];
+
+    if (disconnectedId) {
+      // The OTHER player wins
+      this.winner = disconnectedId === 'player1' ? 'player2' : 'player1';
+      this.endGame('disconnect');
     }
-
-    if (!disconnectedPlayer) return;
-
-    // Award win to remaining player
-    this.winner = disconnectedPlayer === 'player1' ? 'player2' : 'player1';
-    
-    // Notify remaining player
-    this.players.forEach((playerSocket, playerId) => {
-      if (playerId !== disconnectedPlayer && playerSocket.readyState === 1) {
-        playerSocket.send(JSON.stringify({
-          type: 'opponentDisconnected',
-          data: { 
-            message: 'Your opponent disconnected. You win!',
-            winner: playerId
-          }
-        }));
-      }
-    });
-
-    this.endGame();
   }
 
-  broadcastGoal(scorer) {
-    const data = {
-      scorer,
-      player1Score: this.player1.score,
-      player2Score: this.player2.score
-    };
+  endGame(reason) {
+    if (this.state === 'ended') return;
+    this.state = 'ended';
+    this.winReason = reason;
 
-    this.broadcast('goal', data);
+    if (!this.winner) {
+        if (this.player1.score > this.player2.score) this.winner = 'player1';
+        else if (this.player2.score > this.player1.score) this.winner = 'player2';
+        else this.winner = 'draw';
+    }
+
+    clearInterval(this.loopId);
+    
+    this.broadcast('gameEnd', {
+      winner: this.winner,
+      reason: this.winReason,
+      finalScore: { p1: this.player1.score, p2: this.player2.score }
+    });
+
+    console.log(`[${this.gameId}] Game Over. Winner: ${this.winner} (${reason})`);
   }
 
   broadcastState() {
-    const state = this.getState();
-    this.broadcast('update', state);
-  }
-
-  broadcastGameEnd() {
-    const data = {
-      winner: this.winner,
-      finalScore: {
-        player1: this.player1.score,
-        player2: this.player2.score
-      },
-      duration: this.elapsedTime
-    };
-
-    this.broadcast('gameEnd', data);
-  }
-
-  broadcast(type, data) {
-    const message = JSON.stringify({ type, data });
-    
-    this.players.forEach(socket => {
-      if (socket && socket.readyState === 1) {
-        socket.send(message);
-      }
-    });
-  }
-
-  addPlayer(socket, playerId) {
-    this.players.set(playerId, socket);
-    console.log(`[${this.gameId}] Player ${playerId} added. Total: ${this.players.size}`);
-  }
-
-  hasPlayer(socket) {
-    return Array.from(this.players.values()).includes(socket);
-  }
-
-  markPlayerReady(socket) {
-    this.readyPlayers.add(socket);
-
-    const requiredPlayers = this.mode === 'remote' ? 2 : 1;
-    
-    if (this.readyPlayers.size >= requiredPlayers) {
-      setTimeout(() => {
-        this.start();
-      }, 2000); // 2 second delay before starting
-    }
+    const payload = this.getState();
+    this.broadcast('update', payload);
   }
 
   getState() {
     return {
-      gameId: this.gameId,
-      mode: this.mode,
-      player1: this.player1.getState(),
-      player2: this.player2.getState(),
+      p1: this.player1.getState(), // {x, y, z, score}
+      p2: this.player2.getState(),
       ball: this.ball.getState(),
-      fieldWidth: this.fieldWidth,
-      fieldDepth: this.fieldDepth,
-      isRunning: this.isRunning,
-      isPaused: this.isPaused,
-      winner: this.winner,
-      elapsedTime: this.elapsedTime,
-      remainingTime: MAX_GAME_DURATION - this.elapsedTime
+      state: this.state, // 'playing', 'paused'
+      time: Math.floor((CONFIG.MAX_DURATION - this.elapsedTime) / 1000)
     };
   }
 
+  broadcast(type, data) {
+    const msg = JSON.stringify({ type, data });
+    this.players.forEach(socket => {
+      if (socket.readyState === 1) socket.send(msg);
+    });
+  }
+
   cleanup() {
-    this.stop();
+    clearInterval(this.loopId);
     this.players.clear();
-    this.readyPlayers.clear();
   }
 }
 
