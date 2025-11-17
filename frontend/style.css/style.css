@@ -1,3 +1,5 @@
+/* style.css - Your Original Style + Enhanced Features */
+
 * {
     margin: 0;
     padding: 0;
@@ -101,20 +103,21 @@ body {
     position: fixed;
     top: 20px;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(-100px);
     background: rgba(0, 0, 0, 0.8);
     padding: 15px 30px;
     border-radius: 10px;
     font-size: 16px;
-    z-index: 999;
+    z-index: 9999;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: all 0.5s ease;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #statusMessage.visible {
     opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 #statusMessage.waiting {
@@ -132,6 +135,42 @@ body {
     color: #f87171;
 }
 
+/* Countdown - NEW */
+#countdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 120px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 0 30px rgba(59, 130, 246, 0.8), 
+                 0 0 60px rgba(59, 130, 246, 0.5);
+    z-index: 1500;
+    display: none;
+    pointer-events: none;
+}
+
+#countdown.countdown-animation {
+    display: block;
+    animation: countdownPulse 1s ease-out;
+}
+
+@keyframes countdownPulse {
+    0% {
+        transform: translate(-50%, -50%) scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+}
+
 /* Game Header */
 #header {
     background: rgba(22, 33, 62, 0.8);
@@ -142,6 +181,11 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
 }
 
 #header.visible {
@@ -164,6 +208,23 @@ body {
 .score {
     font-size: 36px;
     font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* Score Update Animation - NEW */
+.score.score-update {
+    animation: scoreFlash 0.5s ease-out;
+}
+
+@keyframes scoreFlash {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.3);
+        color: #fbbf24;
+        text-shadow: 0 0 20px #fbbf24;
+    }
 }
 
 .player-color {
@@ -191,9 +252,12 @@ body {
 
 #renderCanvas {
     width: 100%;
-    height: calc(100vh - 100px);
+    height: 100vh;
     display: none;
     outline: none;
+    position: fixed;
+    top: 0;
+    left: 0;
 }
 
 #renderCanvas.visible {

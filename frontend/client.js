@@ -1,4 +1,5 @@
-// client.js - Complete Pong Client with Babylon.js
+// client.js - Complete Production-Ready Pong Client
+// Merging your original design with all improvements
 
 // ==================== GAME STATE ====================
 let socket = null;
@@ -10,6 +11,7 @@ let gameMode = null;
 let playerId = null;
 let gameId = null;
 let isGameRunning = false;
+let connectionId = null;
 
 // Game objects
 let player1Paddle = null;
@@ -17,8 +19,15 @@ let player2Paddle = null;
 let ball = null;
 let field = null;
 
-// Input tracking
-let keys = {};
+// Input throttling system - PREVENTS KEY SPAM BLOCKING
+let inputQueue = [];
+let lastInputTime = 0;
+const INPUT_THROTTLE = 16; // ~60fps
+let inputInterval = null;
+
+// Connection health monitoring
+let lastPingTime = Date.now();
+let pingInterval = null;
 
 // ==================== DOM ELEMENTS ====================
 const canvas = document.getElementById('renderCanvas');
@@ -30,6 +39,7 @@ const queuePositionEl = document.getElementById('queuePosition');
 const queueListEl = document.getElementById('queueList');
 const cancelMatchmakingBtn = document.getElementById('cancelMatchmaking');
 const gameOverScreen = document.getElementById('gameOverScreen');
+const countdownEl = document.getElementById('countdown');
 
 const localBtn = document.getElementById('localBtn');
 const remoteBtn = document.getElementById('remoteBtn');
@@ -54,11 +64,23 @@ function showStatus(message, type = 'connected') {
     }, 3000);
 }
 
+function showCountdown(seconds) {
+    if (!countdownEl) return;
+    
+    countdownEl.textContent = seconds > 0 ? seconds : 'GO!';
+    countdownEl.classList.remove('countdown-animation');
+    
+    // Force reflow to restart animation
+    void countdownEl.offsetWidth;
+    countdownEl.classList.add('countdown-animation');
+}
+
 function hideModeSelection() {
     modeSelection.classList.add('hidden');
-    setTimeout(() => {
-        modeSelection.style.display = 'none';
-    }, 500);
+}
+
+function showModeSelection() {
+    modeSelection.classList.remove('hidden');
 }
 
 function showMatchmaking() {
@@ -67,14 +89,18 @@ function showMatchmaking() {
 
 function hideMatchmaking() {
     matchmaking.classList.remove('visible');
-    queueListEl.innerHTML = '';
+    if (queueListEl) queueListEl.innerHTML = '';
 }
 
 function updateQueuePosition(position) {
-    queuePositionEl.textContent = position;
+    if (queuePositionEl) {
+        queuePositionEl.textContent = position || '-';
+    }
 }
 
 function updateQueueList(players, yourConnectionId) {
+    if (!queueListEl || !players) return;
+    
     queueListEl.innerHTML = '';
 
     players.forEach((player, index) => {
@@ -94,13 +120,6 @@ function updateQueueList(players, yourConnectionId) {
     });
 }
 
-function showModeSelection() {
-    modeSelection.style.display = 'flex';
-    setTimeout(() => {
-        modeSelection.classList.remove('hidden');
-    }, 10);
-}
-
 function showGame() {
     header.classList.add('visible');
     canvas.classList.add('visible');
@@ -114,16 +133,20 @@ function hideGame() {
 function showGameOver(winner, scores) {
     gameOverScreen.classList.add('visible');
 
-    if (winner === 'player1') {
-        winnerTextEl.textContent = gameMode === 'local' ? 'Player 1 Wins! 🎉' :
+    let winnerText = '';
+    if (winner === 'draw') {
+        winnerText = "It's a Draw! 🤝";
+    } else if (winner === 'player1') {
+        winnerText = gameMode === 'local' ? 'Player 1 Wins! 🎉' :
             gameMode === 'solo' ? 'You Win! 🎉' :
-                playerId === 'player1' ? 'You Win! 🎉' : 'Opponent Wins!';
+                playerId === 'player1' ? 'You Win! 🎉' : 'Opponent Wins! 😔';
     } else {
-        winnerTextEl.textContent = gameMode === 'local' ? 'Player 2 Wins! 🎉' :
-            gameMode === 'solo' ? 'AI Wins!' :
-                playerId === 'player2' ? 'You Win! 🎉' : 'Opponent Wins!';
+        winnerText = gameMode === 'local' ? 'Player 2 Wins! 🎉' :
+            gameMode === 'solo' ? 'AI Wins! 🤖' :
+                playerId === 'player2' ? 'You Win! 🎉' : 'Opponent Wins! 😔';
     }
 
+    winnerTextEl.textContent = winnerText;
     finalScoreEl.textContent = `${scores.player1} - ${scores.player2}`;
 }
 
@@ -143,12 +166,12 @@ function updateGameInfo(mode) {
         player2LabelEl.textContent = 'Player 2';
     } else if (mode === 'solo') {
         gameModeEl.textContent = 'vs AI Mode';
-        controlsInfoEl.textContent = 'A/D or ↑/↓ to move';
+        controlsInfoEl.textContent = 'A/D or ←/→ to move';
         player2LabelEl.textContent = 'AI';
     } else if (mode === 'remote') {
         gameModeEl.textContent = 'Online Mode';
-        controlsInfoEl.textContent = 'A/D or ↑/↓ to move';
-        player2LabelEl.textContent = playerId === 'player1' ? 'Opponent' : 'Opponent';
+        controlsInfoEl.textContent = 'A/D or ←/→ to move';
+        player2LabelEl.textContent = 'Opponent';
     }
 }
 
@@ -159,12 +182,12 @@ function connectWebSocket() {
     socket.onopen = () => {
         console.log("✅ Connected to server");
         showStatus("Connected to server", "connected");
+        startPingInterval();
     };
 
     socket.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
-            console.log(message);
             handleServerMessage(message);
         } catch (error) {
             console.error('❌ Error parsing message:', error);
@@ -173,23 +196,49 @@ function connectWebSocket() {
 
     socket.onerror = (error) => {
         console.error("❌ WebSocket error:", error);
-        showStatus("Connection error", "error");
+        showStatus("Connection error. Please refresh.", "error");
     };
 
     socket.onclose = () => {
         console.log("🔌 Connection closed");
         showStatus("Disconnected from server", "error");
+        stopPingInterval();
+        stopInputProcessor();
 
-        // Return to main menu after 2 seconds
         setTimeout(() => {
             resetGame();
         }, 2000);
     };
 }
 
+function startPingInterval() {
+    pingInterval = setInterval(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            sendToServer('ping');
+            
+            // Check if connection is stale
+            if (Date.now() - lastPingTime > 15000) {
+                console.warn('Connection appears stale');
+                showStatus("Connection unstable...", "waiting");
+            }
+        }
+    }, 5000); // Ping every 5 seconds
+}
+
+function stopPingInterval() {
+    if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+    }
+}
+
 function sendToServer(type, data = {}) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type, ...data }));
+        try {
+            socket.send(JSON.stringify({ type, ...data }));
+        } catch (err) {
+            console.error('Error sending message:', err);
+        }
     }
 }
 
@@ -199,13 +248,14 @@ function handleServerMessage(message) {
 
     switch (message.type) {
         case 'connected':
-            console.log('Connection ID:', message.data.connectionId);
+            connectionId = message.data.connectionId;
+            console.log('Connection ID:', connectionId);
             break;
 
         case 'queueStatus':
             updateQueuePosition(message.data.position);
             if (message.data.playersInQueue) {
-                updateQueueList(message.data.playersInQueue, message.data.yourConnectionId);
+                updateQueueList(message.data.playersInQueue, connectionId);
             }
             break;
 
@@ -213,57 +263,152 @@ function handleServerMessage(message) {
             gameId = message.data.gameId;
             playerId = message.data.yourSide;
             hideMatchmaking();
-            showStatus("Match found! Starting game...", "connected");
+            showStatus("Match found! Preparing game...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo('remote');
-            sendToServer('readyRemote', {data: {gameId, playerId, ready: true}});
+            sendToServer('readyRemote', { data: { gameId, playerId } });
             break;
 
         case 'gameCreated':
             gameId = message.data.gameId;
             gameMode = message.data.mode;
+            playerId = message.data.playerId || 'player1';
             showStatus("Game created! Get ready...", "connected");
             initializeGame(message.data.initialState);
             updateGameInfo(gameMode);
             sendToServer('ready');
             break;
 
-        case 'gameStarted':
-            isGameRunning = true;
-            showStatus("Game started!", "connected");
+        case 'gameStarting':
+            showStatus(message.data.message, "connected");
+            if (message.data.countdown) {
+                startCountdownSequence(message.data.countdown);
+            }
             break;
 
         case 'update':
             updateGameState(message.data);
+            if (!isGameRunning && message.data.isRunning) {
+                isGameRunning = true;
+                startInputProcessor();
+            }
             break;
 
-        // case 'GOAL':
-        //     setTimeout(() => {
-
-        //     }, 3000);        
-        //     break;
+        case 'goal':
+            handleGoal(message.data);
+            break;
 
         case 'gameEnd':
             isGameRunning = false;
-            showGameOver(message.data.winner, message.data.finalScore);
+            stopInputProcessor();
+            setTimeout(() => {
+                showGameOver(message.data.winner, message.data.finalScore);
+            }, 500);
             break;
 
         case 'matchmakingTimeout':
-            sendToServer('leaveQueue');
             hideMatchmaking();
-            resetGame();
+            showStatus(message.data.message || "No opponent found. Please try again.", "error");
+            setTimeout(() => resetGame(), 2000);
+            break;
 
         case 'opponentDisconnected':
+            isGameRunning = false;
+            stopInputProcessor();
             showStatus(message.data.message, "error");
             setTimeout(() => {
-                resetGame();
-            }, 3000);
+                if (message.data.winner) {
+                    showGameOver(message.data.winner, { 
+                        player1: player1ScoreEl.textContent || 0, 
+                        player2: player2ScoreEl.textContent || 0 
+                    });
+                } else {
+                    resetGame();
+                }
+            }, 2000);
+            break;
+
+        case 'leftQueue':
+            showStatus(message.data.message, "connected");
+            break;
+
+        case 'pong':
+            lastPingTime = Date.now();
             break;
 
         case 'error':
             showStatus(message.data.message, "error");
             break;
+
+        default:
+            console.warn('Unknown message type:', message.type);
     }
+}
+
+function startCountdownSequence(countSeconds) {
+    let count = countSeconds;
+    
+    const countdownInterval = setInterval(() => {
+        if (count > 0) {
+            showCountdown(count);
+            count--;
+        } else {
+            showCountdown(0); // Show "GO!"
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+}
+
+function handleGoal(data) {
+    console.log(`⚽ Goal by ${data.scorer}!`);
+    updateScores(data.player1Score, data.player2Score);
+    
+    // Visual feedback with animation
+    const scorerEl = data.scorer === 'player1' ? player1ScoreEl : player2ScoreEl;
+    scorerEl.classList.add('score-update');
+    setTimeout(() => {
+        scorerEl.classList.remove('score-update');
+    }, 600);
+}
+
+// ==================== INPUT PROCESSING - KEY IMPROVEMENT ====================
+function startInputProcessor() {
+    if (inputInterval) return;
+    
+    inputInterval = setInterval(() => {
+        processInputQueue();
+    }, INPUT_THROTTLE);
+}
+
+function stopInputProcessor() {
+    if (inputInterval) {
+        clearInterval(inputInterval);
+        inputInterval = null;
+    }
+    inputQueue = [];
+}
+
+function queueInput(playerId, direction) {
+    const now = Date.now();
+    
+    // Intelligent throttling prevents blocking
+    if (now - lastInputTime >= INPUT_THROTTLE || inputQueue.length === 0) {
+        inputQueue.push({ playerId, direction });
+        lastInputTime = now;
+    } else {
+        // Replace last input to prevent queue overflow
+        if (inputQueue.length > 0) {
+            inputQueue[inputQueue.length - 1] = { playerId, direction };
+        }
+    }
+}
+
+function processInputQueue() {
+    if (inputQueue.length === 0 || !isGameRunning) return;
+
+    // Send only the most recent input
+    const input = inputQueue.shift();
+    sendToServer('input', input);
 }
 
 // ==================== BABYLON.JS SCENE SETUP ====================
@@ -273,7 +418,6 @@ function initializeGame(state) {
 
     const fieldWidth = state.fieldWidth;
     const fieldDepth = state.fieldDepth;
-
 
     // Create Babylon engine and scene
     engine = new BABYLON.Engine(canvas, true);
@@ -311,17 +455,19 @@ function initializeGame(state) {
     fieldMat.emissiveColor = new BABYLON.Color3(0.05, 0.15, 0.1);
     field.material = fieldMat;
 
-    // Walls (top and bottom)
+    // Walls
     const wallMat = new BABYLON.StandardMaterial("wallMat", scene);
     wallMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.4);
     wallMat.alpha = 0.3;
 
-    const leftWall = BABYLON.MeshBuilder.CreateBox("leftWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
+    const leftWall = BABYLON.MeshBuilder.CreateBox("leftWall", 
+        { width: 0.5, height: 3, depth: fieldDepth }, scene);
     leftWall.position.x = -fieldWidth / 2;
     leftWall.position.y = 1.5;
     leftWall.material = wallMat;
 
-    const rightWall = BABYLON.MeshBuilder.CreateBox("rightWall", { width: 0.5, height: 3, depth: fieldDepth }, scene);
+    const rightWall = BABYLON.MeshBuilder.CreateBox("rightWall", 
+        { width: 0.5, height: 3, depth: fieldDepth }, scene);
     rightWall.position.x = fieldWidth / 2;
     rightWall.position.y = 1.5;
     rightWall.material = wallMat;
@@ -337,7 +483,8 @@ function initializeGame(state) {
     ball.position.z = state.ball.z;
 
     // Player1 paddle (blue)
-    player1Paddle = BABYLON.MeshBuilder.CreateBox("player", { width: 4, height: 0.8, depth: 0.8 }, scene);
+    player1Paddle = BABYLON.MeshBuilder.CreateBox("player", 
+        { width: 4, height: 0.8, depth: 0.8 }, scene);
     const player1PaddleMat = new BABYLON.StandardMaterial("playerMat", scene);
     player1PaddleMat.diffuseColor = new BABYLON.Color3(0.2, 0.6, 1);
     player1PaddleMat.emissiveColor = new BABYLON.Color3(0.1, 0.3, 0.5);
@@ -346,8 +493,9 @@ function initializeGame(state) {
     player1Paddle.position.y = state.player1.y;
     player1Paddle.position.x = state.player1.x;
 
-    // player2 paddle (red)
-    player2Paddle = BABYLON.MeshBuilder.CreateBox("ai", { width: 4, height: 0.8, depth: 0.8 }, scene);
+    // Player2 paddle (red)
+    player2Paddle = BABYLON.MeshBuilder.CreateBox("ai", 
+        { width: 4, height: 0.8, depth: 0.8 }, scene);
     const player2PaddleMat = new BABYLON.StandardMaterial("aiMat", scene);
     player2PaddleMat.diffuseColor = new BABYLON.Color3(1, 0.3, 0.3);
     player2PaddleMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
@@ -358,12 +506,16 @@ function initializeGame(state) {
 
     // Start render loop
     engine.runRenderLoop(() => {
-        scene.render();
+        if (scene) {
+            scene.render();
+        }
     });
 
     // Handle window resize
     window.addEventListener('resize', () => {
-        engine.resize();
+        if (engine) {
+            engine.resize();
+        }
     });
 
     // Initial state update
@@ -372,8 +524,7 @@ function initializeGame(state) {
 
 // ==================== GAME STATE UPDATE ====================
 function updateGameState(state) {
-
-    if (!player1Paddle || !player2Paddle || !ball) return;
+    if (!player1Paddle || !player2Paddle || !ball || !state) return;
 
     player1Paddle.position.x = state.player1.x;
     player2Paddle.position.x = state.player2.x;
@@ -385,44 +536,41 @@ function updateGameState(state) {
     updateScores(state.player1.score, state.player2.score);
 }
 
-function Pause_GOAL() {
-
-}
-
 // ==================== INPUT HANDLING ====================
+const keys = {};
+
 window.addEventListener('keydown', (e) => {
+    if (keys[e.key]) return; // Prevent key repeat
     keys[e.key] = true;
-    handleInput();
+    handleInput(e.key);
 });
 
 window.addEventListener('keyup', (e) => {
     keys[e.key] = false;
 });
 
-function handleInput() {
+function handleInput(key) {
     if (!isGameRunning) return;
 
     if (gameMode === 'local') {
-        // Player 1: W/S
-        if (keys['d'] || keys['D']) {
-            sendToServer('input', { playerId: 'player1', direction: 'left' });
+        // Player 1: A/D
+        if (key === 'd' || key === 'D') {
+            queueInput('player1', 'left');
+        } else if (key === 'a' || key === 'A') {
+            queueInput('player1', 'right');
         }
-        if (keys['a'] || keys['A']) {
-            sendToServer('input', { playerId: 'player1', direction: 'right' });
-        }
-        // Player 2: Arrow Keys
-        if (keys['l'] || keys['L']) {
-            sendToServer('input', { playerId: 'player2', direction: 'left' });
-        }
-        if (keys['j'] || keys['J']) {
-            sendToServer('input', { playerId: 'player2', direction: 'right' });
+        // Player 2: J/L
+        else if (key === 'l' || key === 'L') {
+            queueInput('player2', 'left');
+        } else if (key === 'j' || key === 'J') {
+            queueInput('player2', 'right');
         }
     } else {
-        if (keys['d'] || keys['D'] || keys['ArrowLeft']) {
-            sendToServer('input', { playerId: playerId, direction: 'left' });
-        }
-        if (keys['a'] || keys['A'] || keys['ArrowRight']) {
-            sendToServer('input', { playerId: playerId, direction: 'right' });
+        // Solo or Remote mode
+        if (key === 'd' || key === 'D' || key === 'ArrowLeft') {
+            queueInput(playerId, 'left');
+        } else if (key === 'a' || key === 'A' || key === 'ArrowRight') {
+            queueInput(playerId, 'right');
         }
     }
 }
@@ -437,11 +585,9 @@ localBtn.addEventListener('click', () => {
 remoteBtn.addEventListener('click', () => {
     gameMode = 'remote';
     sendToServer('selectMode', { mode: 'remote' });
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        hideModeSelection();
-        showMatchmaking();
-        showStatus("Searching for opponent...", "waiting");
-    }
+    hideModeSelection();
+    showMatchmaking();
+    showStatus("Searching for opponent...", "waiting");
 });
 
 soloBtn.addEventListener('click', () => {
@@ -455,14 +601,12 @@ playAgainBtn.addEventListener('click', () => {
     hideGameOver();
 
     if (gameMode === 'remote') {
-        // For remote, need to find new match
         resetGame();
         gameMode = 'remote';
         sendToServer('selectMode', { mode: 'remote' });
         showMatchmaking();
         showStatus("Searching for opponent...", "waiting");
     } else {
-        // For local/solo, restart the same game
         sendToServer('restartGame');
         showStatus("Restarting game...", "waiting");
     }
@@ -473,7 +617,6 @@ mainMenuBtn.addEventListener('click', () => {
     resetGame();
 });
 
-// Cancel matchmaking button
 cancelMatchmakingBtn.addEventListener('click', () => {
     sendToServer('leaveQueue');
     hideMatchmaking();
@@ -482,12 +625,16 @@ cancelMatchmakingBtn.addEventListener('click', () => {
 
 // ==================== GAME RESET ====================
 function resetGame() {
+    stopInputProcessor();
+    stopPingInterval();
+    
     // Dispose Babylon scene
     if (scene) {
         scene.dispose();
         scene = null;
     }
     if (engine) {
+        engine.stopRenderLoop();
         engine.dispose();
         engine = null;
     }
@@ -501,13 +648,30 @@ function resetGame() {
     playerId = null;
     gameId = null;
     isGameRunning = false;
-    keys = {};
 
     // Reset UI
     hideGame();
+    hideMatchmaking();
+    hideGameOver();
     showModeSelection();
     updateScores(0, 0);
+    
+    // Restart ping if still connected
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        startPingInterval();
+    }
 }
 
 // ==================== INITIALIZATION ====================
 connectWebSocket();
+
+// Prevent accidental page unload during game
+window.addEventListener('beforeunload', (e) => {
+    if (isGameRunning) {
+        e.preventDefault();
+        e.returnValue = 'Game in progress. Are you sure you want to leave?';
+        return e.returnValue;
+    }
+});
+
+console.log('🎮 3D Pong Game Client Initialized - Production Ready');

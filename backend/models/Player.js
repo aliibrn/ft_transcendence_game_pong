@@ -1,3 +1,5 @@
+// models/ player
+
 class Player {
   constructor(id, side, fieldWidth, fieldDepth) {
     this.id = id;

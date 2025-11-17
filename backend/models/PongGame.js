@@ -1,5 +1,10 @@
+// models/PongGame.js
 const Player = require('./Player');
 const Ball = require('./Ball');
+
+const GAME_TICK_RATE = 1000 / 60; // 60 FPS
+const MAX_GAME_DURATION = 2 * 60 * 1000; // 2 minutes
+const GOAL_PAUSE_DURATION = 1500; // 1.5 seconds
 
 class PongGame {
   constructor(mode, gameId) {
@@ -14,10 +19,14 @@ class PongGame {
     this.ball = new Ball();
 
     this.gameLoop = null;
+    this.gameTimer = null;
     this.isRunning = false;
+    this.isPaused = false;
     this.winner = null;
+    this.startTime = null;
+    this.elapsedTime = 0;
 
-    this.players = [];
+    this.players = new Map();
     this.readyPlayers = new Set();
   }
 
@@ -25,11 +34,18 @@ class PongGame {
     if (this.isRunning) return;
 
     this.isRunning = true;
+    this.startTime = Date.now();
     this.ball.reset('up');
 
+    // Start game loop
     this.gameLoop = setInterval(() => {
       this.update();
-    }, 1000 / 60);
+    }, GAME_TICK_RATE);
+
+    // Start game timer
+    this.gameTimer = setTimeout(() => {
+      this.handleGameTimeout();
+    }, MAX_GAME_DURATION);
 
     console.log(`[${this.gameId}] Game started in ${this.mode} mode`);
   }
@@ -39,6 +55,12 @@ class PongGame {
       clearInterval(this.gameLoop);
       this.gameLoop = null;
     }
+    
+    if (this.gameTimer) {
+      clearTimeout(this.gameTimer);
+      this.gameTimer = null;
+    }
+    
     this.isRunning = false;
     console.log(`[${this.gameId}] Game stopped`);
   }
@@ -50,20 +72,32 @@ class PongGame {
     console.log(`[${this.gameId}] Game paused for ${duration}ms`);
 
     setTimeout(() => {
-      this.isPaused = false;
-      console.log(`[${this.gameId}] Game resumed`);
+      if (this.isRunning) {
+        this.isPaused = false;
+        console.log(`[${this.gameId}] Game resumed`);
+      }
     }, duration);
   }
 
   update() {
-    if (!this.isRunning) return;
+    if (!this.isRunning || this.isPaused) return;
 
-    if (this.mode === 'solo')
+    // Update elapsed time
+    this.elapsedTime = Date.now() - this.startTime;
+
+    // Update AI if in solo mode
+    if (this.mode === 'solo') {
       this.updateAI();
+    }
 
+    // Update ball physics
     this.ball.update();
+
+    // Check collisions and scoring
     this.checkCollisions();
     this.checkScoring();
+
+    // Broadcast state to all players
     this.broadcastState();
   }
 
@@ -71,41 +105,54 @@ class PongGame {
     const aiPlayer = this.player2;
     const aiSpeed = 0.2;
 
-    if (this.ball.x < aiPlayer.x)
+    // Simple AI: follow the ball
+    if (this.ball.x < aiPlayer.x - 0.5) {
       aiPlayer.x -= aiSpeed;
-    else if (this.ball.x > aiPlayer.x)
+    } else if (this.ball.x > aiPlayer.x + 0.5) {
       aiPlayer.x += aiSpeed;
+    }
 
-    aiPlayer.x = Math.max(-this.fieldWidth / 2 + 2, Math.min(this.fieldWidth / 2 - 2, aiPlayer.x));
+    aiPlayer.x = Math.max(
+      -this.fieldWidth / 2 + 2,
+      Math.min(this.fieldWidth / 2 - 2, aiPlayer.x)
+    );
   }
 
   checkCollisions() {
     const halfWidth = this.fieldWidth / 2;
 
-    if (this.ball.x <= -halfWidth + 0.4 || this.ball.x >= halfWidth - 0.4)
+    // Wall collisions
+    if (this.ball.x <= -halfWidth + 0.4 || this.ball.x >= halfWidth - 0.4) {
       this.ball.reverseX();
+    }
 
+    // Paddle collisions
     this.checkPaddleCollision(this.player1);
     this.checkPaddleCollision(this.player2);
   }
 
   checkPaddleCollision(player) {
-    const ball = this.ball;
-    const ballRadius = ball.radius;
+    const ballRadius = this.ball.radius;
     const paddleHalfWidth = player.width / 2;
     const paddleHalfDepth = player.height / 2;
 
-    const withinX = Math.abs(ball.x - player.x) < paddleHalfWidth + ballRadius;
-    const withinZ = ball.z >= player.z - paddleHalfDepth - ballRadius &&
-      ball.z <= player.z + paddleHalfDepth + ballRadius;
+    const withinX = Math.abs(this.ball.x - player.x) < paddleHalfWidth + ballRadius;
+    const withinZ = this.ball.z >= player.z - paddleHalfDepth - ballRadius &&
+      this.ball.z <= player.z + paddleHalfDepth + ballRadius;
 
     if (withinX && withinZ) {
-      if (player.side === 'down')
-        ball.vz = -Math.abs(ball.vz);
-      else
-        ball.vz = Math.abs(ball.vz);
+      // Reflect ball
+      if (player.side === 'down') {
+        this.ball.vz = -Math.abs(this.ball.vz);
+      } else {
+        this.ball.vz = Math.abs(this.ball.vz);
+      }
 
-      ball.addSpin(player.x);
+      // Add spin based on paddle position
+      this.ball.addSpin(player.x);
+      
+      // Increase speed slightly
+      this.ball.increaseSpeed();
     }
   }
 
@@ -113,36 +160,54 @@ class PongGame {
     const halfDepth = this.fieldDepth / 2;
 
     if (this.ball.z > halfDepth) {
-      this.player2.incrementScore();
-      this.onScore('player2');
-    }
-    else if (this.ball.z < -halfDepth) {
       this.player1.incrementScore();
       this.onScore('player1');
+    } else if (this.ball.z < -halfDepth) {
+      this.player2.incrementScore();
+      this.onScore('player2');
     }
   }
 
   onScore(scorer) {
     console.log(`[${this.gameId}] ${scorer} scored!`);
 
-    // this.pause(300);
+    // Broadcast goal event
+    this.broadcastGoal(scorer);
 
-    // // Broadcast GOAL event immediately
-    // this.broadcastGoal(scorer);
+    // Pause briefly
+    this.pause(GOAL_PAUSE_DURATION);
 
-    const ballDirection = scorer === 'player2' ? 'down' : 'up';
-    this.ball.reset(ballDirection);
+    // Reset ball and paddles
+    setTimeout(() => {
+      const ballDirection = scorer === 'player1' ? 'down' : 'up';
+      this.ball.reset(ballDirection);
+      this.player1.reset();
+      this.player2.reset();
 
-    this.player1.reset();
-    this.player2.reset();
+      // Check for game end
+      if (this.player1.score >= this.maxScore) {
+        this.winner = 'player1';
+        this.endGame();
+      } else if (this.player2.score >= this.maxScore) {
+        this.winner = 'player2';
+        this.endGame();
+      }
+    }, GOAL_PAUSE_DURATION);
+  }
 
-    if (this.player1.score >= this.maxScore) {
+  handleGameTimeout() {
+    console.log(`[${this.gameId}] Game timeout reached`);
+    
+    // Determine winner by score
+    if (this.player1.score > this.player2.score) {
       this.winner = 'player1';
-      this.endGame();
-    } else if (this.player2.score >= this.maxScore) {
+    } else if (this.player2.score > this.player1.score) {
       this.winner = 'player2';
-      this.endGame();
+    } else {
+      this.winner = 'draw';
     }
+    
+    this.endGame();
   }
 
   endGame() {
@@ -152,105 +217,103 @@ class PongGame {
   }
 
   handleInput(playerId, direction) {
-    if (!this.isRunning) return;
+    if (!this.isRunning || this.isPaused) return;
 
-    if (playerId === 'player1') {
-      this.player1.move(direction);
-    } else if (playerId === 'player2') {
-      this.player2.move(direction);
+    const player = playerId === 'player1' ? this.player1 : this.player2;
+    if (player) {
+      player.move(direction);
     }
   }
 
-  // broadcastGoal(scorer) {
-  //   const state = this.getState();
-  //   const goalData = {
-  //     state,
-  //     scorer: scorer,
-  //     isPaused: this.isPaused
-  //   };
+  handlePlayerDisconnect(socket) {
+    console.log(`[${this.gameId}] Player disconnected`);
+    
+    // Determine which player disconnected
+    let disconnectedPlayer = null;
+    for (const [playerId, playerSocket] of this.players.entries()) {
+      if (playerSocket === socket) {
+        disconnectedPlayer = playerId;
+        break;
+      }
+    }
 
-  //   if (this.mode === 'remote') {
-  //     this.players.forEach(playerSocket => {
-  //       if (playerSocket && playerSocket.readyState === 1) {
-  //         playerSocket.send(JSON.stringify({
-  //           type: 'GOAL',
-  //           data: goalData
-  //         }));
-  //       }
-  //     });
-  //   } else {
-  //     if (this.players[0] && this.players[0].readyState === 1) {
-  //       this.players[0].send(JSON.stringify({
-  //         type: 'GOAL',
-  //         data: goalData
-  //       }));
-  //     }
-  //   }
-  // }
+    if (!disconnectedPlayer) return;
+
+    // Award win to remaining player
+    this.winner = disconnectedPlayer === 'player1' ? 'player2' : 'player1';
+    
+    // Notify remaining player
+    this.players.forEach((playerSocket, playerId) => {
+      if (playerId !== disconnectedPlayer && playerSocket.readyState === 1) {
+        playerSocket.send(JSON.stringify({
+          type: 'opponentDisconnected',
+          data: { 
+            message: 'Your opponent disconnected. You win!',
+            winner: playerId
+          }
+        }));
+      }
+    });
+
+    this.endGame();
+  }
+
+  broadcastGoal(scorer) {
+    const data = {
+      scorer,
+      player1Score: this.player1.score,
+      player2Score: this.player2.score
+    };
+
+    this.broadcast('goal', data);
+  }
 
   broadcastState() {
     const state = this.getState();
-
-    if (this.mode === 'remote') {
-      this.players.forEach(playerSocket => {
-        if (playerSocket && playerSocket.readyState === 1) {
-          playerSocket.send(JSON.stringify({
-            type: 'update',
-            data: state
-          }));
-        }
-      });
-    } else {
-      if (this.players[0] && this.players[0].readyState === 1) {
-        this.players[0].send(JSON.stringify({
-          type: 'update',
-          data: state
-        }));
-      }
-    }
+    this.broadcast('update', state);
   }
 
   broadcastGameEnd() {
-    const endData = {
+    const data = {
       winner: this.winner,
       finalScore: {
         player1: this.player1.score,
         player2: this.player2.score
-      }
+      },
+      duration: this.elapsedTime
     };
 
-    if (this.mode === 'remote') {
-      this.players.forEach(playerSocket => {
-        if (playerSocket && playerSocket.readyState === 1) {
-          playerSocket.send(JSON.stringify({
-            type: 'gameEnd',
-            data: endData
-          }));
-        }
-      });
-    } else {
-      if (this.players[0] && this.players[0].readyState === 1) {
-        this.players[0].send(JSON.stringify({
-          type: 'gameEnd',
-          data: endData
-        }));
-      }
-    }
+    this.broadcast('gameEnd', data);
   }
 
-  addPlayer(socket) {
-    this.players.push(socket);
-    console.log(`[${this.gameId}] Player added. Total: ${this.players.length}`);
+  broadcast(type, data) {
+    const message = JSON.stringify({ type, data });
+    
+    this.players.forEach(socket => {
+      if (socket && socket.readyState === 1) {
+        socket.send(message);
+      }
+    });
+  }
+
+  addPlayer(socket, playerId) {
+    this.players.set(playerId, socket);
+    console.log(`[${this.gameId}] Player ${playerId} added. Total: ${this.players.size}`);
+  }
+
+  hasPlayer(socket) {
+    return Array.from(this.players.values()).includes(socket);
   }
 
   markPlayerReady(socket) {
     this.readyPlayers.add(socket);
 
-    if (this.mode === 'remote' && this.readyPlayers.size === 2) {
-      this.start();
-    }
-    else if (this.mode !== 'remote') {
-      this.start();
+    const requiredPlayers = this.mode === 'remote' ? 2 : 1;
+    
+    if (this.readyPlayers.size >= requiredPlayers) {
+      setTimeout(() => {
+        this.start();
+      }, 2000); // 2 second delay before starting
     }
   }
 
@@ -264,13 +327,16 @@ class PongGame {
       fieldWidth: this.fieldWidth,
       fieldDepth: this.fieldDepth,
       isRunning: this.isRunning,
-      winner: this.winner
+      isPaused: this.isPaused,
+      winner: this.winner,
+      elapsedTime: this.elapsedTime,
+      remainingTime: MAX_GAME_DURATION - this.elapsedTime
     };
   }
 
   cleanup() {
     this.stop();
-    this.players = [];
+    this.players.clear();
     this.readyPlayers.clear();
   }
 }

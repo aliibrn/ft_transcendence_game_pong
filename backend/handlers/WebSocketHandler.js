@@ -1,3 +1,5 @@
+// handlers/WebSocketHandler.js
+
 const PongGame = require('../models/PongGame');
 const matchmakingService = require('../services/MatchmakingService');
 
@@ -38,6 +40,10 @@ class WebSocketHandler {
           this.handleReady();
           break;
 
+        case 'readyRemote':
+          this.handleReadyRemote(data.data);
+          break;
+
         case 'input':
           this.handleInput(data);
           break;
@@ -50,9 +56,10 @@ class WebSocketHandler {
           this.handleRestartGame();
           break;
 
-        case 'readyRemote':
-          this.handleReadyRemote(data.data);
+        case 'ping':
+          this.send('pong', { timestamp: Date.now() });
           break;
+
         default:
           console.warn(`[${this.connectionId}] Unknown message type:`, data.type);
       }
@@ -69,107 +76,137 @@ class WebSocketHandler {
     }
 
     this.mode = mode;
-
     console.log(`[${this.connectionId}] Mode selected: ${mode}`);
 
     if (mode === 'remote') {
       matchmakingService.addToQueue(this.socket, this.connectionId);
     } else {
-      this.gameId = `${mode}_${this.connectionId}_${Date.now()}`;
-      this.game = new PongGame(mode, this.gameId);
-      this.game.addPlayer(this.socket);
-
-      this.send('gameCreated', {
-        gameId: this.gameId,
-        mode: mode,
-        initialState: this.game.getState()
-      });
+      this.createLocalGame(mode);
     }
   }
 
+  createLocalGame(mode) {
+    this.gameId = `${mode}_${this.connectionId}_${Date.now()}`;
+    this.game = new PongGame(mode, this.gameId);
+    this.playerId = 'player1';
+    this.game.addPlayer(this.socket, 'player1');
+
+    this.send('gameCreated', {
+      gameId: this.gameId,
+      mode: mode,
+      playerId: this.playerId,
+      initialState: this.game.getState()
+    });
+  }
+
   handleReadyRemote(data) {
+    if (!data || !data.gameId || !data.playerId) {
+      console.warn(`[${this.connectionId}] Invalid ready data`);
+      return;
+    }
+
     this.game = matchmakingService.getGame(data.gameId);
     this.gameId = data.gameId;
     this.playerId = data.playerId;
 
     if (!this.game) {
-      console.warn(`[handleReadyRemote] Game ${data.gameId} not found`);
+      console.warn(`[${this.connectionId}] Game ${data.gameId} not found`);
+      this.send('error', { message: 'Game not found' });
       return;
     }
+
     this.game.markPlayerReady(this.socket);
+    this.send('gameStarting', { 
+      message: 'Starting in 2 seconds...',
+      countdown: 2 
+    });
   }
 
   handleReady() {
-    if (this.game) {
-      this.game.markPlayerReady(this.socket);
-      this.send('gameStarted', {
-        message: 'Game started!',
-        state: this.game.getState()
-      });
-    }
-  }
-
-  handleInput(data) {
-    const { playerId, direction } = data;
-
-    if (!direction || !['left', 'right'].includes(direction)) {
+    if (!this.game) {
+      console.warn(`[${this.connectionId}] No game to mark ready`);
       return;
     }
 
-    if (this.mode === 'remote') {
-      if (game) {
-        this.game.handleInput(playerId, direction);
-      }
+    this.game.markPlayerReady(this.socket);
+    this.send('gameStarting', { 
+      message: 'Starting in 2 seconds...',
+      countdown: 2 
+    });
+  }
+
+  handleInput(data) {
+    if (!data || !data.playerId || !data.direction) {
+      return;
     }
-    else if (this.game && (this.mode === 'local' || this.mode === 'solo'))
-      this.game.handleInput(playerId, direction);
+
+    if (!['left', 'right'].includes(data.direction)) {
+      return;
+    }
+
+    // Validate player ID matches
+    if (this.mode === 'remote' && data.playerId !== this.playerId) {
+      return;
+    }
+
+    if (this.game) {
+      this.game.handleInput(data.playerId, data.direction);
+    }
   }
 
   handleLeaveQueue() {
     if (this.mode === 'remote') {
       matchmakingService.removeFromQueue(this.socket);
-      this.send('leftQueue', { message: 'You left the queue' });
+      this.send('leftQueue', { message: 'You left the matchmaking queue' });
+      this.mode = null;
     }
   }
 
   handleRestartGame() {
-    if (this.mode !== 'remote' && this.game) {
-      this.game.cleanup();
-      this.game = new PongGame(this.mode, this.gameId);
-      this.game.addPlayer(this.socket);
-
-      this.send('gameCreated', {
-        gameId: this.gameId,
-        mode: this.mode,
-        initialState: this.game.getState()
-      });
+    if (this.mode === 'remote') {
+      this.send('error', { message: 'Cannot restart online games. Return to menu.' });
+      return;
     }
+
+    if (this.game) {
+      this.game.cleanup();
+      this.game = null;
+    }
+
+    this.createLocalGame(this.mode);
   }
 
   send(type, data) {
     if (this.socket.readyState === 1) {
-      this.socket.send(JSON.stringify({ type, data }));
+      try {
+        this.socket.send(JSON.stringify({ type, data }));
+      } catch (err) {
+        console.error(`[${this.connectionId}] Error sending message:`, err);
+      }
     }
   }
 
   handleClose() {
     console.log(`[${this.connectionId}] Client disconnected`);
-
-    if (this.mode === 'remote') {
-      matchmakingService.handleDisconnect(this.socket);
-    } else if (this.game) {
-      this.game.cleanup();
-    }
+    this.cleanup();
   }
 
   handleError(err) {
     console.error(`[${this.connectionId}] Socket error:`, err);
-    this.handleClose();
+    this.cleanup();
   }
 
-  setGameInfo(gameId, playerId) {
-    this.gameId = gameId;
-    this.playerId = playerId;
+  cleanup() {
+    if (this.mode === 'remote') {
+      matchmakingService.handleDisconnect(this.socket, this.gameId);
+    } else if (this.game) {
+      this.game.cleanup();
+    }
+
+    this.game = null;
+    this.gameId = null;
+    this.playerId = null;
+    this.mode = null;
   }
 }
 
