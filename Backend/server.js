@@ -3,11 +3,11 @@
 const fastify = require('fastify')()
 fastify.register(require('@fastify/websocket'))
 
-const handleNewConnection = require('./controllers/ConnectionController')
+const ConnectionController = require('./controllers/ConnectionController')
 
 fastify.register(async function (fastify) {
     fastify.get('/ws', { websocket: true }, (socket /* WebSocket */, req /* FastifyRequest */) => {
-        handleNewConnection(socket, req);
+        ConnectionController(socket, req);
     })
 })
 

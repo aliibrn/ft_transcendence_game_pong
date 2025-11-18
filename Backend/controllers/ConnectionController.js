@@ -5,7 +5,7 @@ const WebSocketHandler = require('../handlers/WebSocketHandler');
 let connectionCounter = 0;
 const activeConnections = new Map();
 
-function handleNewConnection(socket, req) {
+function ConnectionController(socket, req) {
 
     const connectionId = `conn_${++connectionCounter}_${Date.now()}`;
     try {
@@ -22,13 +22,18 @@ function handleNewConnection(socket, req) {
 
 function socket_init(socket, connectionId, handler) {
 
-    socket.on('close', () => {
-        handleDisconnection(connectionId, handler);
-    });
+    socket.on('message', (msg) => handler.handleMessage(msg));
+
+    socket.on('close', () => handleDisconnection(connectionId, handler));
 
     socket.on('error', (err) => {
         console.error(`[Controller] Socket error for ${connectionId}:`, err.message);
         handleDisconnection(connectionId, handler);
+    });
+
+    handler.send('connected', {
+        connectionId: this.connectionId,
+        timestamp: Date.now()
     });
 }
 
@@ -49,4 +54,4 @@ function logStats(event, connectionId) {
     console.log(`[Controller] Active connections: ${activeConnections.size}`);
 }
 
-module.exports = handleNewConnection;
+module.exports = ConnectionController;
