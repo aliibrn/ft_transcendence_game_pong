@@ -14,9 +14,7 @@ class WebSocketHandler {
 
             switch (data.type) {
                 case 'game':
-                    GameController(data.data, {
-                        connectionId: this.connectionId, 
-                        socket: this.socket});
+                    GameController(data.data, this);
                     break;
                         
                 default:
