@@ -1,5 +1,7 @@
 const LocalPongGame = require('../modules/PongGame/LocalPongGame');
 const SoloPongGame = require('../modules/PongGame/SoloPongGame');
+const matchmakingService = require('../services/MatchmakingService');
+const MatchmakingService = require('../services/MatchmakingService')
 
 
 games = new Map();
@@ -62,9 +64,15 @@ function selectMode(data, WebSocketHandler) {
         case 'local':
             game = new LocalPongGame({ gameId: gameId, mode: data.mode }, WebSocketHandler);
             games.set(gameId, game);
+            break;
         case 'solo':
             game = new SoloPongGame({ gameId: gameId, mode: data.mode }, WebSocketHandler);
             games.set(gameId, game);
+            break;
+        case 'remote':
+            matchmakingService.addToQueue(WebSocketHandler, data);
+            break;
+
     }
 }
 
